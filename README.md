@@ -2,7 +2,7 @@
 
 Standalone **clean-room** prototype of a VSIX extension for writing Rhino 8 CPython scripts in **Visual Studio** (NOT VS Code), using Visual Studio's Python Tools for editing and IntelliSense. It runs saved scripts in an existing Rhino 8 instance by calling McNeel's official `rhinocode` CLI. Original inspiration: Jingcheng Chen's RhinoPythonForVS. None of that repository's source code was copied (its license has not been confirmed).
 
-> **Important:** This is a source-code prototype, not a tested release. Python/XML smoke checks pass on Linux, but compiling and running the VSIX requires a Windows machine with Visual Studio 2026, the extension SDK, and Rhino 8. IntelliSense type stub recognition must be verified in Visual Studio itself. A prebuilt `.vsix` is **not** supplied yet.
+> **Important:** This is a development preview, not a finished release. The VSIX now builds and loads on the Windows test machine with Visual Studio 2026 and Rhino 8, but Rhino type-stub IntelliSense and several edge cases still need work. Generated `.vsix` files are build artifacts and are intentionally not committed.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ Visual Studio 2026 (PTVS Python editor)
 
 ## Prerequisites on Windows
 
-1. **Visual Studio 2026**, with the **Visual Studio extension development** workload and **Python development** workload. A VS2022 SDK (API 17.x) is used so the resulting VSIX *should also* be compatible with Visual Studio 2022; both require real-world tests.
+1. **Visual Studio 2026**, with the **Visual Studio extension development** workload and **Python development** workload. The project uses VS2022-compatible VSSDK APIs where practical. Command-line builds have succeeded with both Visual Studio 2026 and Visual Studio 2022; extension loading has currently been verified only in the Visual Studio 2026 experimental instance.
 2. **Rhino 8.11 or newer**, with `rhinocode.exe` in `%ProgramFiles%\Rhino 8\System\`.
 3. Open Rhino and enter the command **`StartScriptServer`**. Open **`ScriptEditor`** once to generate Python type stubs.
 4. For editing and autocomplete, create or open a **Visual Studio Python project** (`.pyproj`) and choose a regular compatible CPython environment for its static analysis. Execution is **always** performed by Rhino, NOT by Visual Studio's selected Python interpreter.
@@ -36,6 +36,14 @@ Visual Studio 2026 (PTVS Python editor)
 - Restore NuGet packages. Build **Debug / Any CPU**. The SDK-style project uses `Microsoft.VisualStudio.SDK` 17.14 and `Microsoft.VSSDK.BuildTools` 18.5; package versions may be updated as needed.
 - Use **F5** to launch the Visual Studio experimental instance, or install the generated `.vsix` after successful compilation.
 - Under **Tools**, find five `Rhino:` menu commands.
+
+The current verified build output is:
+
+```text
+src\RhinoVSBridge\bin\Debug\net48\RhinoVSBridge.vsix
+```
+
+`bin` and `obj` directories, generated VSIX packages, IDE state, test caches, and user-specific backup files are excluded from Git.
 
 ### Workflow
 
@@ -50,7 +58,10 @@ Visual Studio 2026 (PTVS Python editor)
 
 - The `.pyi` stubs for the RhinoCommon/.NET assemblies normally appear under `~/.rhinocode/py39-rh8/site-stubs/rhino3d-<build>` once Rhino's ScriptEditor has been opened.
 - `rhinoscriptsyntax` and `scriptcontext` require the actual Python library source in Rhino's `site-rhinopython` or older settings/lib folders. The extension discovers likely paths rather than downloading unsupported type packages.
-- PTVS's support for McNeel's generated stubs needs to be tested. This code configures the search paths, **not** a new IntelliSense language server. In particular, type completion for Python.NET bindings is not guaranteed yet.
+- On the test machine, the extension discovers the current Rhino 8.35 stub tree and writes the expected paths to the Python project. Visual Studio 2026 starts its bundled Pylance server and local-project navigation works, but member completion from the Rhino-generated stubs has **not** been confirmed.
+- `Rhino.Geometry.Point3d` is present in Rhino's generated `.pyi` files and `rhinoscriptsyntax.AddLine` is present in `site-rhinopython`; the remaining problem appears to be PTVS/Pylance search-path or stub interpretation rather than missing Rhino files.
+- This extension configures project search paths; it does **not** install a custom editor or language server, copy stubs into the project, or modify Rhino's Python installation.
+- Do not use Visual Studio's ordinary Python Run/Debug command for Rhino scripts. The selected interpreter is for editing and static analysis only; execute scripts through **Tools > Rhino: Run Active Python Script** so they run inside Rhino.
 
 ## Simple CLI test without any VSIX
 
@@ -69,17 +80,46 @@ Run portable tests:
 python -m unittest discover -s tests -v
 ```
 
+## Verified status (2026-10-15)
+
+### Automated checks
+
+- NuGet restore and `Debug | Any CPU` rebuild with Visual Studio Community 2026 18.11: **passed**, 0 warnings and 0 errors.
+- Command-line build with Visual Studio 2022: **passed**. Loading the VSIX in Visual Studio 2022 is not yet verified.
+- VSIX packaging: **passed**. The package contains `extension.vsixmanifest`, `RhinoVSBridge.dll`, and `RhinoVSBridge.pkgdef`; the compiled command table is embedded in the package assembly.
+- Unit tests: **8/8 passed** with `python -m unittest discover -s tests -v`.
+- Official RhinoCode discovery: `rhinocode list --json` found the running Rhino 8.35 instance and its script-server pipe.
+- `examples/hello_rhino.py` executed through the official RhinoCode CLI in Rhino CPython 3, and the integration verifier confirmed exactly one point was added.
+- CLI quoting with a script path containing spaces is covered by an automated test and passed.
+
+### Actual GUI checks
+
+- The VSIX loaded in a Visual Studio 2026 experimental instance.
+- All five `Rhino:` commands were present under **Tools**.
+- The package initialized successfully when its commands were invoked.
+- The IntelliSense test project opened and Visual Studio's bundled Pylance 2026.3.1 started.
+
+### Still to test or fix
+
+- Confirm member completion in Visual Studio for `Rhino.Geometry.Point3d`, `rhinoscriptsyntax.AddLine`, and `scriptcontext`. The generated files exist, but Pylance did not reliably offer their members through the configured `.pyproj` search paths.
+- Re-test the complete **Tools > Rhino: Run Active Python Script** path after the IntelliSense work. Direct execution through the same official RhinoCode protocol is already verified.
+- Verify explicit target selection with two simultaneously running Rhino instances and ensure a script cannot be sent to the wrong instance.
+- Perform the requested real filesystem test under `C:\Users\Test User\Projects\my test.py`; only an equivalent space-containing path and the quoting unit test have been exercised so far.
+- Install and load the generated VSIX in Visual Studio 2022.
+- Add Windows CI that builds and publishes the VSIX artifact.
+
 ## Current milestones
 
 - [x] Investigated RhinoCode CLI and VS SDK, documented clean-room architecture.
 - [x] Wrote initial VSIX project with Tools menu commands and asynchronous CLI execution.
 - [x] Added instance picker, output window, and Python stub path discovery with `.pyproj` backup.
 - [x] Added stand-alone RhinoCode connectivity probe and initial XML/CLI tests.
-- [ ] Build/restore in Visual Studio 2026 on Windows; fix compiler or manifest issues.
-- [ ] Confirm VSIX loads and commands work with actual Rhino 8.
+- [x] Restored and built the VSIX with Visual Studio 2026 on Windows without warnings or errors.
+- [x] Confirmed the VSIX loads and all five commands register in the Visual Studio 2026 experimental instance.
+- [x] Confirmed official RhinoCode discovery and CPython script execution in an actual running Rhino 8 instance.
 - [ ] Confirm `Rhino.Geometry` and `rhinoscriptsyntax` member IntelliSense in PTVS; improve if necessary.
 - [ ] Add reliable cancellation, keyboard shortcut defaults, traceback navigation, more tests, configuration persistence.
-- [ ] Add CI producing an installable `.vsix` and a private GitHub repository.
+- [ ] Add Windows CI producing an installable `.vsix` artifact.
 
 ## References
 
@@ -92,4 +132,4 @@ python -m unittest discover -s tests -v
 
 ## Notes for Codex
 
-Read `AGENTS.md`. The first meaningful next task is to compile and test this VSIX against a real Windows Visual Studio 2026 + Rhino 8 environment, **before** adding larger features. Avoid claiming this source-only prototype is installed or finished.
+Read `AGENTS.md`. Keep subsequent work on feature branches. The next priority is the reproducible PTVS/Pylance Rhino-stub investigation, followed by the remaining multi-instance, spaced-user-path, Visual Studio 2022 load, and CI checks. Do not add larger features until these integration basics are reliable.
