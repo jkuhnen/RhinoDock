@@ -1,0 +1,60 @@
+# Visual Studio state and user-specific settings
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# Build output and generated packages
+**/[Bb]in/
+**/[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+artifacts/
+out/
+TestResults/
+*.vsix
+*.nupkg
+*.snupkg
+packages/
+
+# Test, coverage, and Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Temporary files, logs, and local backups
+*.tmp
+*.temp
+*.log
+*.cache
+*.bak
+*.rhino-bridge.bak
+~$*
+
+# Local IDE settings
+.idea/
+.vscode/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+secrets.json
+appsettings.*.local.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

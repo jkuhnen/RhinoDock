@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+  <Commands package="guidRhinoVSBridgePackage">
+    <Groups>
+      <Group guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" priority="0x0800">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" />
+      </Group>
+    </Groups>
+    <Buttons>
+      <Button guid="guidRhinoVSBridgeCmdSet" id="RunActive" priority="0x0100" type="Button">
+        <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
+        <Strings><ButtonText>Rhino: Run Active Python Script</ButtonText></Strings>
+      </Button>
+      <Button guid="guidRhinoVSBridgeCmdSet" id="SelectInstance" priority="0x0200" type="Button">
+        <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
+        <Strings><ButtonText>Rhino: Select Instance</ButtonText></Strings>
+      </Button>
+      <Button guid="guidRhinoVSBridgeCmdSet" id="SetupIntelliSense" priority="0x0300" type="Button">
+        <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
+        <Strings><ButtonText>Rhino: Configure Project IntelliSense</ButtonText></Strings>
+      </Button>
+      <Button guid="guidRhinoVSBridgeCmdSet" id="ShowDiagnostics" priority="0x0400" type="Button">
+        <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
+        <Strings><ButtonText>Rhino: Diagnose Connection and Stubs</ButtonText></Strings>
+      </Button>
+      <Button guid="guidRhinoVSBridgeCmdSet" id="ChooseExecutable" priority="0x0500" type="Button">
+        <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
+        <Strings><ButtonText>Rhino: Choose rhinocode.exe</ButtonText></Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+  <Symbols>
+    <GuidSymbol name="guidRhinoVSBridgePackage" value="{e58ce92e-c24c-423e-aa69-8f5e51b71914}" />
+    <GuidSymbol name="guidRhinoVSBridgeCmdSet" value="{55ec8c08-a567-4509-af25-8c2912f0516f}">
+      <IDSymbol name="RhinoGroup" value="0x1020" />
+      <IDSymbol name="RunActive" value="0x0100" />
+      <IDSymbol name="SelectInstance" value="0x0101" />
+      <IDSymbol name="SetupIntelliSense" value="0x0102" />
+      <IDSymbol name="ShowDiagnostics" value="0x0103" />
+      <IDSymbol name="ChooseExecutable" value="0x0104" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>
