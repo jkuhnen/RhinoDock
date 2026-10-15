@@ -168,14 +168,17 @@ namespace RhinoVSBridge
                 return;
             }
             var confirmation = MessageBox.Show(
-                "Add " + paths.Count + " discovered Rhino paths to:\r\n" + projectFile +
+                "Configure Rhino 8 CPython IntelliSense for:\r\n" + projectFile +
                 "\r\n\r\nA .rhino-bridge.bak backup will be made first. " +
-                "Reload the Python project afterward to refresh IntelliSense.",
+                "The command adds the discovered Rhino paths and a project-local " +
+                "scriptcontext typing shim. Close and reopen the solution afterward.",
                 "Rhino VS Bridge", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
             if (confirmation != DialogResult.OK) return;
-            var added = IntelliSensePaths.AddToPythonProject(projectFile, paths);
-            MessageBox.Show("Added " + added + " Rhino Python search paths. " +
-                "Reload the project in Solution Explorer, and check RhinoCommon/rhinoscriptsyntax autocomplete.",
+            var result = IntelliSensePaths.ConfigurePythonProject(projectFile, paths);
+            MessageBox.Show("Added " + result.AddedPaths + " Python search paths. " +
+                (result.CompatibilityStubWritten ? "Created the scriptcontext typing shim. " : string.Empty) +
+                "Close and reopen the solution, then check RhinoCommon, rhinoscriptsyntax, " +
+                "scriptcontext, and local-module completion.",
                 "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 

@@ -5,7 +5,7 @@
     <ProjectGuid>{2E8C1274-0C04-47AA-A38E-82B0896F4CC6}</ProjectGuid>
     <ProjectHome>.</ProjectHome>
     <StartupFile>intellisense_smoke.py</StartupFile>
-    <SearchPath>C:\Users\Johannes\.rhinocode\py39-rh8\site-stubs\rhino3d-8.35.26251.13001;C:\Users\Johannes\.rhinocode\py39-rh8\site-stubs;C:\Users\Johannes\.rhinocode\py39-rh8\site-rhinopython;C:\Users\Johannes\.rhinocode\py39-rh8\site-interop;C:\Users\Johannes\AppData\Roaming\McNeel\Rhinoceros\8.0\Plug-ins\IronPython (814d908a-e25c-493d-97e9-ee3861957f49)\settings\lib</SearchPath>
+    <SearchPath>.rhino-vs-bridge\typings</SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
     <Name>RhinoIntelliSenseTest</Name>
@@ -21,7 +21,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="intellisense_smoke.py" />
+    <Compile Include="intellisense_probe.py" />
     <Compile Include="local_module.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include=".rhino-vs-bridge\typings\scriptcontext.pyi" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <Target Name="CoreCompile" />
