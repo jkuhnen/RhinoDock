@@ -27,8 +27,16 @@ namespace RhinoVSBridge
         internal sealed class ConfigurationResult
         {
             public int AddedPaths { get; set; }
+            public int RemovedPaths { get; set; }
             public bool CompatibilityStubWritten { get; set; }
             public string CompatibilityStubPath { get; set; } = string.Empty;
+        }
+
+        internal sealed class SearchPathUpdate
+        {
+            public int Added { get; set; }
+            public int Removed { get; set; }
+            public IReadOnlyList<string> Paths { get; set; } = Array.Empty<string>();
         }
 
         public static IReadOnlyList<string> Discover()
@@ -89,9 +97,11 @@ namespace RhinoVSBridge
 
             var stubPath = EnsureCompatibilityStubs(projectFile);
             var projectPaths = new[] { CompatibilityDirectory }.Concat(paths).ToList();
+            var update = UpdatePythonProject(projectFile, projectPaths);
             return new ConfigurationResult
             {
-                AddedPaths = AddToPythonProject(projectFile, projectPaths),
+                AddedPaths = update.Added,
+                RemovedPaths = update.Removed,
                 CompatibilityStubWritten = stubPath.Written,
                 CompatibilityStubPath = stubPath.Path
             };
@@ -116,13 +126,11 @@ namespace RhinoVSBridge
             return (stubPath, true);
         }
 
-        /// <returns>The number of newly added paths.</returns>
-        public static int AddToPythonProject(string projectFile, IReadOnlyList<string> paths)
+        public static SearchPathUpdate UpdatePythonProject(string projectFile, IReadOnlyList<string> paths)
         {
             if (!string.Equals(Path.GetExtension(projectFile), ".pyproj", StringComparison.OrdinalIgnoreCase))
                 throw new ArgumentException("Expected a Visual Studio Python project (*.pyproj).", nameof(projectFile));
             if (!File.Exists(projectFile)) throw new FileNotFoundException("Python project missing.", projectFile);
-            if (paths.Count == 0) return 0;
 
             var doc = new XmlDocument { PreserveWhitespace = true };
             doc.Load(projectFile);
@@ -142,20 +150,75 @@ namespace RhinoVSBridge
             }
             var existing = node.InnerText.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(x => x.Trim()).ToList();
-            int added = 0;
-            foreach (var path in paths)
+            var reconciled = ReconcileSearchPaths(existing, paths);
+            var added = reconciled.Count(path => !existing.Contains(path, StringComparer.OrdinalIgnoreCase));
+            var removed = existing.Count(path => !reconciled.Contains(path, StringComparer.OrdinalIgnoreCase));
+            var changed = !existing.SequenceEqual(reconciled, StringComparer.OrdinalIgnoreCase);
+            if (changed)
             {
-                if (existing.Any(x => string.Equals(x, path, StringComparison.OrdinalIgnoreCase))) continue;
-                existing.Add(path);
-                added++;
+                // PTVS can reload the .pyproj via Solution Explorer. Preserve the user's original first.
+                File.Copy(projectFile, projectFile + ".rhino-bridge.bak", overwrite: true);
+                node.InnerText = string.Join(";", reconciled);
+                doc.Save(projectFile);
             }
-            if (added == 0) return 0;
+            return new SearchPathUpdate { Added = added, Removed = removed, Paths = reconciled };
+        }
 
-            // PTVS can reload the .pyproj via Solution Explorer. Preserve the user's original first.
-            File.Copy(projectFile, projectFile + ".rhino-bridge.bak", overwrite: true);
-            node.InnerText = string.Join(";", existing);
-            doc.Save(projectFile);
-            return added;
+        internal static IReadOnlyList<string> ReconcileSearchPaths(
+            IReadOnlyList<string> existing,
+            IReadOnlyList<string> desired,
+            string? rhinoPythonRoot = null)
+        {
+            var wanted = desired.Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(path => path.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var result = new List<string>();
+            foreach (var rawPath in existing)
+            {
+                var path = rawPath.Trim();
+                if (path.Length == 0 || result.Contains(path, StringComparer.OrdinalIgnoreCase)) continue;
+                if (wanted.Contains(path, StringComparer.OrdinalIgnoreCase) || !IsManagedRhinoPath(path, rhinoPythonRoot))
+                    result.Add(path);
+            }
+            foreach (var path in wanted)
+            {
+                if (!result.Contains(path, StringComparer.OrdinalIgnoreCase)) result.Add(path);
+            }
+            return result;
+        }
+
+        private static bool IsManagedRhinoPath(string path, string? rhinoPythonRoot)
+        {
+            if (!Path.IsPathRooted(path)) return false;
+            var root = rhinoPythonRoot;
+            if (string.IsNullOrWhiteSpace(root))
+            {
+                root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".rhinocode", "py39-rh8");
+            }
+            string fullPath;
+            string fullRoot;
+            try
+            {
+                fullPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path))
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                fullRoot = Path.GetFullPath(root)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
+            {
+                return false;
+            }
+            if (!fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return false;
+            var relative = fullPath.Substring(fullRoot.Length + 1);
+            return relative.Equals("site-stubs", StringComparison.OrdinalIgnoreCase) ||
+                relative.StartsWith("site-stubs" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                relative.Equals("site-rhinopython", StringComparison.OrdinalIgnoreCase) ||
+                relative.StartsWith("site-rhinopython" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                relative.Equals("site-interop", StringComparison.OrdinalIgnoreCase) ||
+                relative.StartsWith("site-interop" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

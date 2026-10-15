@@ -23,6 +23,9 @@
     <Compile Include="intellisense_smoke.py" />
     <Compile Include="intellisense_probe.py" />
     <Compile Include="local_module.py" />
+    <Compile Include="e2e_workflow.py" />
+    <Compile Include="e2e_print_and_error.py" />
+    <Compile Include="e2e_verify.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".rhino-vs-bridge\typings\scriptcontext.pyi" />

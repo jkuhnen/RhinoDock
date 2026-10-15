@@ -11,26 +11,44 @@
     <Buttons>
       <Button guid="guidRhinoVSBridgeCmdSet" id="RunActive" priority="0x0100" type="Button">
         <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
-        <Strings><ButtonText>Rhino: Run Active Python Script</ButtonText></Strings>
+        <Strings>
+          <ButtonText>Rhino: Run Active Python Script</ButtonText>
+          <CommandName>RhinoVSBridge.RunActivePythonScript</CommandName>
+        </Strings>
       </Button>
       <Button guid="guidRhinoVSBridgeCmdSet" id="SelectInstance" priority="0x0200" type="Button">
         <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
-        <Strings><ButtonText>Rhino: Select Instance</ButtonText></Strings>
+        <Strings>
+          <ButtonText>Rhino: Select Instance</ButtonText>
+          <CommandName>RhinoVSBridge.SelectInstance</CommandName>
+        </Strings>
       </Button>
       <Button guid="guidRhinoVSBridgeCmdSet" id="SetupIntelliSense" priority="0x0300" type="Button">
         <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
-        <Strings><ButtonText>Rhino: Configure Project IntelliSense</ButtonText></Strings>
+        <Strings>
+          <ButtonText>Rhino: Configure Project IntelliSense</ButtonText>
+          <CommandName>RhinoVSBridge.ConfigureProjectIntelliSense</CommandName>
+        </Strings>
       </Button>
       <Button guid="guidRhinoVSBridgeCmdSet" id="ShowDiagnostics" priority="0x0400" type="Button">
         <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
-        <Strings><ButtonText>Rhino: Diagnose Connection and Stubs</ButtonText></Strings>
+        <Strings>
+          <ButtonText>Rhino: Diagnose Connection and Stubs</ButtonText>
+          <CommandName>RhinoVSBridge.DiagnoseConnectionAndStubs</CommandName>
+        </Strings>
       </Button>
       <Button guid="guidRhinoVSBridgeCmdSet" id="ChooseExecutable" priority="0x0500" type="Button">
         <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
-        <Strings><ButtonText>Rhino: Choose rhinocode.exe</ButtonText></Strings>
+        <Strings>
+          <ButtonText>Rhino: Choose rhinocode.exe</ButtonText>
+          <CommandName>RhinoVSBridge.ChooseRhinoCodeExecutable</CommandName>
+        </Strings>
       </Button>
     </Buttons>
   </Commands>
+  <KeyBindings>
+    <KeyBinding guid="guidRhinoVSBridgeCmdSet" id="RunActive" editor="GUID_TextEditorFactory" key1="VK_F2" mod1="Shift" />
+  </KeyBindings>
   <Symbols>
     <GuidSymbol name="guidRhinoVSBridgePackage" value="{e58ce92e-c24c-423e-aa69-8f5e51b71914}" />
     <GuidSymbol name="guidRhinoVSBridgeCmdSet" value="{55ec8c08-a567-4509-af25-8c2912f0516f}">

@@ -25,6 +25,29 @@ class IntegrationContractTests(unittest.TestCase):
         code = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
         for value in expected.values():
             self.assertIn("Register(commands, 0x" + format(value, "04x"), code)
+    def test_run_command_has_shift_f2_text_editor_binding(self):
+
+        tree = ET.parse(ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct")
+        root = tree.getroot()
+        bindings = [node for node in root.iter() if node.tag.endswith("KeyBinding")]
+        run_binding = next(node for node in bindings
+                           if node.attrib.get("id") == "RunActive")
+        self.assertEqual("GUID_TextEditorFactory", run_binding.attrib["editor"])
+        self.assertEqual("VK_F2", run_binding.attrib["key1"])
+        self.assertEqual("Shift", run_binding.attrib["mod1"])
+
+        command_names = [node.text for node in root.iter()
+                         if node.tag.endswith("CommandName")]
+        self.assertIn("RhinoVSBridge.RunActivePythonScript", command_names)
+
+    def test_cpython_runner_captures_output_and_original_tracebacks(self):
+        code = (ROOT / "src/RhinoVSBridge/RhinoCli.cs").read_text()
+        self.assertIn("contextlib.redirect_stdout", code)
+        self.assertIn("contextlib.redirect_stderr", code)
+        self.assertIn("compile(source_file.read(), script_path, 'exec')", code)
+        self.assertIn("traceback.print_exc()", code)
+        self.assertIn("sys.path.insert(0, script_directory)", code)
+        self.assertIn("Convert.ToBase64String", code)
 
     def test_package_requests_the_compiled_command_table_resource(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"

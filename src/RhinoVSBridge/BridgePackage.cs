@@ -15,7 +15,7 @@ using Task = System.Threading.Tasks.Task;
 namespace RhinoVSBridge
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("Rhino VS Bridge", "Rhino 8 CPython execution for Visual Studio", "0.1")]
+    [InstalledProductRegistration("Rhino VS Bridge", "Rhino 8 CPython execution for Visual Studio", "0.2.3")]
     [ProvideMenuResource("RhinoVSBridge.CTMENU", 1)]
     [Guid(PackageGuid)]
     public sealed class BridgePackage : AsyncPackage
@@ -54,7 +54,7 @@ namespace RhinoVSBridge
                     try { await action(); }
                     catch (Exception ex)
                     {
-                        await LogAsync("ERROR: " + ex + Environment.NewLine);
+                        await LogAsync("ERROR: " + ex.Message + Environment.NewLine);
                         await JoinableTaskFactory.SwitchToMainThreadAsync();
                         MessageBox.Show(ex.Message, "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
@@ -67,32 +67,81 @@ namespace RhinoVSBridge
             await JoinableTaskFactory.SwitchToMainThreadAsync();
             if (_running) { MessageBox.Show("A script is already running.", "Rhino VS Bridge"); return; }
             if (_dte?.ActiveDocument == null) { MessageBox.Show("Open a .py file first."); return; }
-            _dte.ActiveDocument.Save();
-            var file = _dte.ActiveDocument.FullName;
+            var document = _dte.ActiveDocument;
+            var hadUnsavedChanges = !document.Saved;
+            document.Save();
+            var file = document.FullName;
             if (string.IsNullOrWhiteSpace(file)) { MessageBox.Show("Save your .py file before running it."); return; }
+            if (!string.Equals(Path.GetExtension(file), ".py", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(Path.GetExtension(file), ".py2", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show("The active document must be a Rhino Python .py or .py2 script.", "Rhino VS Bridge");
+                return;
+            }
+            if (!File.Exists(file)) { MessageBox.Show("The active script could not be saved.", "Rhino VS Bridge"); return; }
 
             _running = true;
             try
             {
-                // Resolve automatically when there is just one instance; require an explicit choice otherwise.
+                if (hadUnsavedChanges) await LogAsync("Saved unsaved changes: " + file + "\r\n");
                 var instances = await _cli.ListInstancesAsync();
-                if (instances.Count == 0)
-                    throw new InvalidOperationException("No Rhino script server found. Run StartScriptServer in Rhino 8 first.");
-                if (_pipeId == null || instances.All(x => x.PipeId != _pipeId))
+                var resolution = RhinoTargetSelector.Resolve(instances, _pipeId);
+                if (resolution.Kind == RhinoTargetResolutionKind.NoInstances)
                 {
-                    _pipeId = instances.Count == 1 ? instances[0].PipeId : null;
-                    if (_pipeId == null)
-                    {
-                        await JoinableTaskFactory.SwitchToMainThreadAsync();
-                        _pipeId = ChooseInstance(instances);
-                    }
+                    _pipeId = null;
+                    throw new InvalidOperationException("No Rhino script server found. Run StartScriptServer in Rhino 8 first.");
                 }
-                if (_pipeId == null) return;
-                await LogAsync($"\r\n=== Running {file} in {_pipeId} ===\r\n");
-                var result = await _cli.RunScriptAsync(file, _pipeId);
+                if (resolution.Kind == RhinoTargetResolutionKind.SelectedInstanceUnavailable)
+                {
+                    var unavailable = resolution.UnavailablePipeId;
+                    _pipeId = null;
+                    throw new InvalidOperationException(
+                        "The previously selected Rhino instance (" + unavailable + ") is no longer available. " +
+                        "No script was sent. Use 'Rhino: Select Instance' before running again.");
+                }
+                RhinoInstance? target = resolution.Instance;
+                if (resolution.Kind == RhinoTargetResolutionKind.SelectionRequired)
+                {
+                    await JoinableTaskFactory.SwitchToMainThreadAsync();
+                    var chosenPipe = ChooseInstance(instances);
+                    if (chosenPipe == null) return;
+                    target = instances.First(instance => instance.PipeId == chosenPipe);
+                }
+                if (target == null) return;
+                var pipeId = target.PipeId;
+                _pipeId = pipeId;
+                await LogAsync($"\r\n=== Running {file} ===\r\nTarget: {target}\r\n");
+                CommandResult result;
+                try
+                {
+                    result = await _cli.RunScriptAsync(file, pipeId);
+                }
+                catch (TimeoutException)
+                {
+                    _pipeId = null;
+                    throw;
+                }
                 await LogAsync(result.DisplayText + "\r\n");
+                if (!result.Succeeded)
+                {
+                    if (!await IsInstanceAvailableAsync(pipeId))
+                    {
+                        _pipeId = null;
+                        throw new InvalidOperationException(
+                            "The selected Rhino ScriptServer connection was lost. Restart ScriptServer and select the instance again.");
+                    }
+                    throw new InvalidOperationException(
+                        "Rhino reported that the script failed. See the Python exception and traceback above in the Rhino VS Bridge output.");
+                }
+                await LogAsync("=== Script completed successfully ===\r\n");
             }
             finally { _running = false; }
+        }
+
+        private async Task<bool> IsInstanceAvailableAsync(string pipeId)
+        {
+            try { return (await _cli.ListInstancesAsync()).Any(x => x.PipeId == pipeId); }
+            catch { return false; }
         }
 
         private async Task SelectInstanceAsync()
@@ -170,12 +219,13 @@ namespace RhinoVSBridge
             var confirmation = MessageBox.Show(
                 "Configure Rhino 8 CPython IntelliSense for:\r\n" + projectFile +
                 "\r\n\r\nA .rhino-bridge.bak backup will be made first. " +
-                "The command adds the discovered Rhino paths and a project-local " +
+                "The command updates the discovered Rhino paths, removes obsolete paths managed by the bridge, and adds a project-local " +
                 "scriptcontext typing shim. Close and reopen the solution afterward.",
                 "Rhino VS Bridge", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
             if (confirmation != DialogResult.OK) return;
             var result = IntelliSensePaths.ConfigurePythonProject(projectFile, paths);
-            MessageBox.Show("Added " + result.AddedPaths + " Python search paths. " +
+            MessageBox.Show("Added " + result.AddedPaths + " and removed " + result.RemovedPaths +
+                " obsolete Rhino Python search paths. " +
                 (result.CompatibilityStubWritten ? "Created the scriptcontext typing shim. " : string.Empty) +
                 "Close and reopen the solution, then check RhinoCommon, rhinoscriptsyntax, " +
                 "scriptcontext, and local-module completion.",
