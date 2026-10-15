@@ -3,6 +3,9 @@
 Verified on 2026-10-15 with Visual Studio Community 2026 18.11, Rhino 8.35,
 and Rhino's official `rhinocode.exe`. The tests used an isolated Visual Studio
 root suffix and a running Rhino ScriptServer.
+This report records the v0.2.3 workflow verification. Version 0.3 replaces its
+fixed timeout and temporary runner lifecycle; see [the v0.3 reliability report](execution-reliability-v03.md).
+
 
 ## How execution works
 
@@ -78,8 +81,8 @@ This command changes the active Rhino document by adding a point.
 - The traceback can include one bridge-runner frame before the original script
   frame. Original file names and line numbers are retained, but clickable
   traceback navigation into Visual Studio is not implemented.
-- A five-minute timeout prevents an indefinitely blocked CLI call. Interactive
-  cancellation of a currently executing Rhino script is not implemented.
+- This v0.2.3 test used a five-minute timeout and had no cancellation command.
+  Those historical limitations are replaced by the v0.3 reliability design.
 - The no-ScriptServer and mid-execution interruption messages have automated
   coverage and defensive handling, but the user's primary Rhino session was
   not deliberately stopped during the GUI tests.

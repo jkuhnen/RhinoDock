@@ -16,6 +16,13 @@
           <CommandName>RhinoVSBridge.RunActivePythonScript</CommandName>
         </Strings>
       </Button>
+      <Button guid="guidRhinoVSBridgeCmdSet" id="CancelActive" priority="0x0150" type="Button">
+        <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
+        <Strings>
+          <ButtonText>Rhino: Cancel Running Script</ButtonText>
+          <CommandName>RhinoVSBridge.CancelRunningScript</CommandName>
+        </Strings>
+      </Button>
       <Button guid="guidRhinoVSBridgeCmdSet" id="SelectInstance" priority="0x0200" type="Button">
         <Parent guid="guidRhinoVSBridgeCmdSet" id="RhinoGroup" />
         <Strings>
@@ -58,6 +65,7 @@
       <IDSymbol name="SetupIntelliSense" value="0x0102" />
       <IDSymbol name="ShowDiagnostics" value="0x0103" />
       <IDSymbol name="ChooseExecutable" value="0x0104" />
+      <IDSymbol name="CancelActive" value="0x0105" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

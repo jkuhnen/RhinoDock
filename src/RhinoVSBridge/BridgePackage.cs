@@ -15,7 +15,7 @@ using Task = System.Threading.Tasks.Task;
 namespace RhinoVSBridge
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("Rhino VS Bridge", "Rhino 8 CPython execution for Visual Studio", "0.2.3")]
+    [InstalledProductRegistration("Rhino VS Bridge", "Rhino 8 CPython execution for Visual Studio", "0.3.0")]
     [ProvideMenuResource("RhinoVSBridge.CTMENU", 1)]
     [Guid(PackageGuid)]
     public sealed class BridgePackage : AsyncPackage
@@ -23,6 +23,7 @@ namespace RhinoVSBridge
         private const string PackageGuid = "e58ce92e-c24c-423e-aa69-8f5e51b71914";
         private static readonly Guid CommandSet = new Guid("55ec8c08-a567-4509-af25-8c2912f0516f");
         private readonly RhinoCli _cli = new RhinoCli();
+        private readonly RhinoExecutionCoordinator _executions = new RhinoExecutionCoordinator();
         private string? _pipeId;
         private bool _running;
         private DTE2? _dte;
@@ -41,6 +42,14 @@ namespace RhinoVSBridge
             Register(commands, 0x0102, SetupIntelliSenseAsync);
             Register(commands, 0x0103, ShowDiagnosticsAsync);
             Register(commands, 0x0104, ChooseExecutableAsync);
+            Register(commands, 0x0105, CancelActiveAsync);
+
+            var removed = ExecutionWorkspace.CleanupCompleted(DateTime.UtcNow, TimeSpan.FromDays(1));
+            var incomplete = ExecutionWorkspace.FindIncomplete();
+            if (removed.Count > 0) await LogAsync("Removed " + removed.Count + " completed execution workspace(s).\r\n");
+            if (incomplete.Count > 0)
+                await LogAsync("Preserved " + incomplete.Count + " incomplete execution workspace(s) because Rhino may still use them. " +
+                    "See " + ExecutionWorkspace.DefaultRoot + "\r\n");
         }
 
         private void Register(OleMenuCommandService commands, int id, Func<Task> action)
@@ -110,32 +119,81 @@ namespace RhinoVSBridge
                 if (target == null) return;
                 var pipeId = target.PipeId;
                 _pipeId = pipeId;
-                await LogAsync($"\r\n=== Running {file} ===\r\nTarget: {target}\r\n");
-                CommandResult result;
+                var canCancel = string.Equals(Path.GetExtension(file), ".py", StringComparison.OrdinalIgnoreCase);
+                if (!_executions.TryStart(pipeId, file, canCancel, out var execution) || execution == null)
+                    throw new InvalidOperationException("A script is already running in the selected Rhino instance.");
+                var executionFinalized = false;
                 try
                 {
-                    result = await _cli.RunScriptAsync(file, pipeId);
-                }
-                catch (TimeoutException)
-                {
-                    _pipeId = null;
-                    throw;
-                }
-                await LogAsync(result.DisplayText + "\r\n");
-                if (!result.Succeeded)
-                {
-                    if (!await IsInstanceAvailableAsync(pipeId))
+                    await LogAsync($"\r\n=== Running {file} ===\r\nTarget: {target}\r\n" +
+                        (canCancel ? "Use Tools > Rhino: Cancel Running Script to request cooperative cancellation.\r\n" :
+                        "Legacy .py2 execution cannot be cancelled safely by the bridge.\r\n"));
+                    var result = await _cli.RunScriptAsync(file, pipeId,
+                        output => LogAsync(output.Text), execution.Cancellation.Token);
+
+                    if (result.ExecutionInterrupted)
                     {
-                        _pipeId = null;
+                        await LogAsync(result.DisplayText + "\r\n");
+                        execution.MarkUncertain(result.PreservedWorkspace);
+                        if (!await IsInstanceAvailableAsync(pipeId)) _pipeId = null;
                         throw new InvalidOperationException(
-                            "The selected Rhino ScriptServer connection was lost. Restart ScriptServer and select the instance again.");
+                            "The RhinoCode transport ended before Rhino returned a final script result. " +
+                            "The script may still be running, so its execution files were preserved at: " +
+                            result.PreservedWorkspace);
                     }
-                    throw new InvalidOperationException(
-                        "Rhino reported that the script failed. See the Python exception and traceback above in the Rhino VS Bridge output.");
+                    executionFinalized = true;
+
+                    if (!canCancel) await LogAsync(result.DisplayText + "\r\n");
+                    else await LogAsync("[rhinocode exit code: " + result.ExitCode + "]\r\n");
+
+                    if (result.Cancelled)
+                    {
+                        await LogAsync("=== Cancellation acknowledged inside Rhino ===\r\n");
+                        return;
+                    }
+                    if (!result.Succeeded)
+                    {
+                        if (!await IsInstanceAvailableAsync(pipeId))
+                        {
+                            _pipeId = null;
+                            throw new InvalidOperationException(
+                                "The selected Rhino ScriptServer connection was lost. Restart ScriptServer and select the instance again.");
+                        }
+                        throw new InvalidOperationException(
+                            "Rhino reported that the script failed. See the Python exception and traceback above in the Rhino VS Bridge output.");
+                    }
+                    await LogAsync("=== Script completed successfully ===\r\n");
                 }
-                await LogAsync("=== Script completed successfully ===\r\n");
+                finally
+                {
+                    if (executionFinalized) _executions.Complete(execution);
+                    else execution.MarkUncertain(null);
+                }
             }
             finally { _running = false; }
+        }
+
+        private async Task CancelActiveAsync()
+        {
+            var requested = _executions.RequestCancellation(_pipeId, out var execution);
+            if (execution == null)
+            {
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                MessageBox.Show("No Rhino script started by this extension is currently running.",
+                    "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (!execution.CanCancel)
+            {
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                MessageBox.Show("The active .py2 script cannot be cancelled safely. " +
+                    "The bridge will not terminate rhinocode.exe because that does not prove execution stopped inside Rhino.",
+                    "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (requested)
+                await LogAsync("Cancellation requested for " + execution.ScriptPath + " in " + execution.PipeId +
+                    ". Waiting for Rhino CPython to reach a safe Python trace point.\r\n");
         }
 
         private async Task<bool> IsInstanceAvailableAsync(string pipeId)

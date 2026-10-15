@@ -47,6 +47,9 @@ namespace RhinoVSBridge
         [DataMember(Name = "stdout")]
         public string StandardOutput { get; set; } = "";
 
+        [DataMember(Name = "cancelled")]
+        public bool Cancelled { get; set; }
+
         [DataMember(Name = "stderr")]
         public string StandardError { get; set; } = "";
     }
@@ -56,6 +59,10 @@ namespace RhinoVSBridge
         public int ExitCode { get; set; }
         public string StandardOutput { get; set; } = "";
         public string StandardError { get; set; } = "";
+        public bool Cancelled { get; set; }
+        public bool ExecutionInterrupted { get; set; }
+        public string? PreservedWorkspace { get; set; }
+
 
         public bool Succeeded => ExitCode == 0;
 
@@ -85,7 +92,6 @@ namespace RhinoVSBridge
     /// </summary>
     internal sealed class RhinoCli
     {
-        internal const int DefaultScriptTimeoutMs = 5 * 60 * 1000;
 
         public string Executable { get; set; }
 
@@ -135,7 +141,16 @@ namespace RhinoVSBridge
             }
         }
 
-        public async Task<CommandResult> RunScriptAsync(string fullPath, string pipeId)
+        public Task<CommandResult> RunScriptAsync(string fullPath, string pipeId)
+        {
+            return RunScriptAsync(fullPath, pipeId, null, CancellationToken.None);
+        }
+
+        public async Task<CommandResult> RunScriptAsync(
+            string fullPath,
+            string pipeId,
+            Func<ScriptOutputEvent, Task>? onOutput,
+            CancellationToken cancellationRequest)
         {
             if (!File.Exists(fullPath))
                 throw new FileNotFoundException("Save the script before running it in Rhino.", fullPath);
@@ -146,101 +161,16 @@ namespace RhinoVSBridge
                 throw new ArgumentException("Choose a running Rhino instance.", nameof(pipeId));
 
             if (string.Equals(Path.GetExtension(fullPath), ".py2", StringComparison.OrdinalIgnoreCase))
-                return await ExecuteAsync(BuildRunArguments(fullPath, pipeId), DefaultScriptTimeoutMs).ConfigureAwait(false);
+                return await ExecuteAsync(BuildRunArguments(fullPath, pipeId), Timeout.Infinite).ConfigureAwait(false);
 
-            var runDirectory = Path.Combine(Path.GetTempPath(), "RhinoVSBridge", Guid.NewGuid().ToString("N"));
-            var runnerPath = Path.Combine(runDirectory, "bridge_runner.py");
-            var resultPath = Path.Combine(runDirectory, "result.json");
-            Directory.CreateDirectory(runDirectory);
-            try
-            {
-                File.WriteAllText(runnerPath, CreateCaptureRunner(fullPath, resultPath), new UTF8Encoding(false));
-                var cliResult = await ExecuteAsync(BuildRunArguments(runnerPath, pipeId), DefaultScriptTimeoutMs)
-                    .ConfigureAwait(false);
-                if (!cliResult.Succeeded) return cliResult;
-
-                var captured = await WaitForCaptureResultAsync(resultPath, DefaultScriptTimeoutMs).ConfigureAwait(false);
-                return new CommandResult
-                {
-                    ExitCode = captured.Success ? 0 : 1,
-                    StandardOutput = cliResult.StandardOutput + captured.StandardOutput,
-                    StandardError = cliResult.StandardError + captured.StandardError
-                };
-            }
-            finally
-            {
-                try { Directory.Delete(runDirectory, recursive: true); }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
-            }
-        }
-
-        internal static string CreateCaptureRunner(string scriptPath, string resultPath)
-        {
-            var script = Convert.ToBase64String(Encoding.UTF8.GetBytes(scriptPath));
-            var result = Convert.ToBase64String(Encoding.UTF8.GetBytes(resultPath));
-            return "import base64, contextlib, io, json, os, sys, tokenize, traceback\n" +
-                $"script_path = base64.b64decode('{script}').decode('utf-8')\n" +
-                $"result_path = base64.b64decode('{result}').decode('utf-8')\n" +
-                "stdout_buffer, stderr_buffer, success = io.StringIO(), io.StringIO(), True\n" +
-                "script_directory = os.path.dirname(script_path)\n" +
-                "sys.path.insert(0, script_directory)\n" +
-                "try:\n" +
-                "    with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(stderr_buffer):\n" +
-                "        try:\n" +
-                "            with tokenize.open(script_path) as source_file:\n" +
-                "                code = compile(source_file.read(), script_path, 'exec')\n" +
-                "            scope = {'__name__': '__main__', '__file__': script_path, '__package__': None}\n" +
-                "            exec(code, scope, scope)\n" +
-                "        except BaseException:\n" +
-                "            success = False\n" +
-                "            traceback.print_exc()\n" +
-                "finally:\n" +
-                "    if sys.path and sys.path[0] == script_directory:\n" +
-                "        del sys.path[0]\n" +
-                "    payload = {'success': success, 'stdout': stdout_buffer.getvalue(), 'stderr': stderr_buffer.getvalue()}\n" +
-                "    temporary_result = result_path + '.tmp'\n" +
-                "    with open(temporary_result, 'w', encoding='utf-8') as result_file:\n" +
-                "        json.dump(payload, result_file, ensure_ascii=False)\n" +
-                "    os.replace(temporary_result, result_path)\n";
+            return await RhinoExecutionRunner.RunAsync(this, fullPath, pipeId, onOutput, cancellationRequest)
+                .ConfigureAwait(false);
         }
 
         internal static string BuildRunArguments(string fullPath, string pipeId)
         {
             return "--rhino " + QuoteWindowsArgument(pipeId) +
                 " script " + QuoteWindowsArgument(fullPath);
-        }
-
-        private static async Task<ScriptCaptureResult> WaitForCaptureResultAsync(string resultPath, int timeoutMs)
-        {
-            var stopwatch = Stopwatch.StartNew();
-            while (!File.Exists(resultPath))
-            {
-                if (stopwatch.ElapsedMilliseconds >= timeoutMs)
-                    throw new TimeoutException(
-                        "Rhino accepted the script request but did not return a result. Its ScriptServer connection may have been interrupted.");
-                await Task.Delay(50).ConfigureAwait(false);
-            }
-            string json;
-            try { json = File.ReadAllText(resultPath, Encoding.UTF8); }
-            catch (IOException)
-            {
-                await Task.Delay(50).ConfigureAwait(false);
-                json = File.ReadAllText(resultPath, Encoding.UTF8);
-            }
-            using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json)))
-            {
-                var serializer = new DataContractJsonSerializer(typeof(ScriptCaptureResult));
-                try
-                {
-                    return (ScriptCaptureResult?)serializer.ReadObject(stream)
-                        ?? throw new InvalidOperationException("Rhino returned an empty script result.");
-                }
-                catch (SerializationException ex)
-                {
-                    throw new InvalidOperationException("Rhino returned an invalid script result.", ex);
-                }
-            }
         }
 
         /// <summary>Windows CommandLineToArgvW-compatible quoting (handles paths with spaces and trailing backslashes).</summary>
@@ -305,8 +235,9 @@ namespace RhinoVSBridge
                 {
                     try { process.Kill(); } catch (InvalidOperationException) { }
                     await Task.Run(() => process.WaitForExit()).ConfigureAwait(false);
-                    throw new TimeoutException(
-                        "rhinocode did not finish within five minutes. Rhino may be busy or its ScriptServer connection was interrupted.");
+                    throw new TimeoutException(timeoutMs == 15000
+                        ? "rhinocode list did not respond within 15 seconds. Check the Rhino ScriptServer connection."
+                        : "rhinocode did not respond within the configured timeout. Rhino may be busy or its ScriptServer connection was interrupted.");
                 }
                 var output = await stdout.ConfigureAwait(false);
                 var error = await stderr.ConfigureAwait(false);

@@ -19,6 +19,7 @@ class IntegrationContractTests(unittest.TestCase):
             "SetupIntelliSense": 0x0102,
             "ShowDiagnostics": 0x0103,
             "ChooseExecutable": 0x0104,
+            "CancelActive": 0x0105,
         }
         for name, value in expected.items():
             self.assertEqual(value, sym[name])
@@ -41,13 +42,15 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn("RhinoVSBridge.RunActivePythonScript", command_names)
 
     def test_cpython_runner_captures_output_and_original_tracebacks(self):
-        code = (ROOT / "src/RhinoVSBridge/RhinoCli.cs").read_text()
+        code = (ROOT / "src/RhinoVSBridge/RhinoExecutionRunner.cs").read_text()
         self.assertIn("contextlib.redirect_stdout", code)
         self.assertIn("contextlib.redirect_stderr", code)
         self.assertIn("compile(source_file.read(), script_path, 'exec')", code)
         self.assertIn("traceback.print_exc()", code)
         self.assertIn("sys.path.insert(0, script_directory)", code)
         self.assertIn("Convert.ToBase64String", code)
+        self.assertIn("sys.settrace(cancellation_trace)", code)
+        self.assertIn("os.replace(temporary_result, result_path)", code)
 
     def test_package_requests_the_compiled_command_table_resource(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"
