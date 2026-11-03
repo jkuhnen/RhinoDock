@@ -51,6 +51,8 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn("Convert.ToBase64String", code)
         self.assertIn("sys.settrace(cancellation_trace)", code)
         self.assertIn("os.replace(temporary_startup, startup_path)", code)
+        self.assertIn("'sessionId': session_id", code)
+        self.assertIn("'pipeId': pipe_id", code)
         self.assertIn("StartupTimedOut = true", code)
         self.assertIn("os.replace(temporary_result, result_path)", code)
 
@@ -66,6 +68,20 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn("if (result.DispatchFailed)", package)
         self.assertIn("executionFinalized = true", package)
         self.assertIn("if (result.StartupTimedOut)", package)
+
+    def test_uncertain_execution_reconciliation_requires_terminal_identity(self):
+        coordinator = (ROOT / "src/RhinoVSBridge/RhinoExecutionCoordinator.cs").read_text()
+        package = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
+        runner = (ROOT / "src/RhinoVSBridge/RhinoExecutionRunner.cs").read_text()
+
+        self.assertIn("expectedSessionId", runner)
+        self.assertIn("expectedPipeId", runner)
+        self.assertIn("CompletionArtifactStatus.IdentityMismatch", runner)
+        self.assertIn("MonitorUncertainAsync", coordinator)
+        self.assertIn("CancellationRequestStatus.AlreadyCompleted", coordinator)
+        self.assertIn("ReconciliationMonitorDuration", package)
+        self.assertIn("Execution slot released and ready for another run", package)
+        self.assertNotIn("execution.MarkUncertain(null)", package)
 
     def test_package_requests_the_compiled_command_table_resource(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"

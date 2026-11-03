@@ -1,5 +1,9 @@
 # Execution reliability for v0.3.1
 
+This document records the v0.3.1 behavior. Version 0.3.2 automatically
+reconciles identity-validated late terminal results; see
+[the v0.3.2 execution-state report](execution-reliability-v032.md).
+
 Version 0.3.1 builds on the GUI-tested v0.3.0 execution path. It keeps normal
 Python execution, live output, cooperative cancellation, original tracebacks,
 and per-Rhino overlap prevention unchanged. The release adds a bounded startup

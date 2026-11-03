@@ -9,6 +9,7 @@ namespace RhinoVSBridge
     internal sealed class ExecutionWorkspace
     {
         public string SessionId { get; }
+        public string PipeId { get; }
         public string DirectoryPath { get; }
         public string RunnerPath => Path.Combine(DirectoryPath, "bridge_runner.py");
         public string StartupPath => Path.Combine(DirectoryPath, "started.json");
@@ -17,9 +18,10 @@ namespace RhinoVSBridge
         public string CancellationPath => Path.Combine(DirectoryPath, "cancel.requested");
         public string MetadataPath => Path.Combine(DirectoryPath, "session.txt");
 
-        private ExecutionWorkspace(string sessionId, string directoryPath)
+        private ExecutionWorkspace(string sessionId, string pipeId, string directoryPath)
         {
             SessionId = sessionId;
+            PipeId = pipeId;
             DirectoryPath = directoryPath;
         }
 
@@ -40,11 +42,12 @@ namespace RhinoVSBridge
             Directory.CreateDirectory(directory);
             File.WriteAllText(Path.Combine(directory, "output.jsonl"), string.Empty, new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(directory, "session.txt"),
+                "sessionId=" + sessionId + Environment.NewLine +
                 "createdUtc=" + DateTime.UtcNow.ToString("O") + Environment.NewLine +
                 "pipeId=" + pipeId + Environment.NewLine +
                 "scriptPath=" + scriptPath + Environment.NewLine,
                 new UTF8Encoding(false));
-            return new ExecutionWorkspace(sessionId, directory);
+            return new ExecutionWorkspace(sessionId, pipeId, directory);
         }
 
         public bool RequestCancellation()
@@ -62,10 +65,15 @@ namespace RhinoVSBridge
 
         public bool TryDeleteCompleted()
         {
-            if (!HasCompletedResult) return false;
+            return TryDeleteCompleted(DirectoryPath);
+        }
+
+        public static bool TryDeleteCompleted(string directoryPath)
+        {
+            if (!File.Exists(Path.Combine(directoryPath, "result.json"))) return false;
             try
             {
-                Directory.Delete(DirectoryPath, recursive: true);
+                Directory.Delete(directoryPath, recursive: true);
                 return true;
             }
             catch (IOException) { return false; }

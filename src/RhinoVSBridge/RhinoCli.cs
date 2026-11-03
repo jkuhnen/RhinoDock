@@ -41,6 +41,12 @@ namespace RhinoVSBridge
     [DataContract]
     internal sealed class ScriptCaptureResult
     {
+        [DataMember(Name = "sessionId")]
+        public string SessionId { get; set; } = "";
+
+        [DataMember(Name = "pipeId")]
+        public string PipeId { get; set; } = "";
+
         [DataMember(Name = "success")]
         public bool Success { get; set; }
 
@@ -64,6 +70,7 @@ namespace RhinoVSBridge
         public bool StartupTimedOut { get; set; }
         public bool ExecutionInterrupted { get; set; }
         public string? PreservedWorkspace { get; set; }
+        public string? ExecutionSessionId { get; set; }
 
 
         public bool Succeeded => ExitCode == 0;

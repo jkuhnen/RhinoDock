@@ -83,6 +83,13 @@ namespace RhinoVSBridge
                 ("Failed process launch cleans up and permits recovery", TestFailedProcessLaunchRecovery),
                 ("Immediate process failure cleans up and permits recovery", TestImmediateProcessFailureRecovery),
                 ("Execution coordinator prevents overlap per Rhino instance", TestExecutionCoordinator),
+                ("Late successful completion releases an uncertain slot", TestLateSuccessfulCompletion),
+                ("Late failed completion releases an uncertain slot", TestLateFailedCompletion),
+                ("Cancellation before delayed startup is preserved and reconciled", TestCancellationBeforeDelayedStart),
+                ("Cancellation after completion creates no marker", TestCancellationAfterCompletion),
+                ("Missing malformed and mismatched results preserve the safety lock", TestInvalidCompletionArtifacts),
+                ("Completion and cancellation race reconciles exactly once", TestCompletionCancellationRace),
+                ("Reconciliation is isolated to the expected Rhino instance", TestReconciliationInstanceIsolation),
                 ("Workspace cleanup removes only completed old executions", TestWorkspaceCleanup),
                 ("Interrupted transports preserve execution files", TestInterruptedTransport)
             };
@@ -344,11 +351,13 @@ namespace RhinoVSBridge
                     preserved = result.PreservedWorkspace;
                     True(!string.IsNullOrWhiteSpace(preserved) && Directory.Exists(preserved),
                         "Startup-timeout workspace was not preserved.");
-                    execution.MarkUncertain(preserved);
+                    True(coordinator.MarkUncertain(execution, preserved, result.ExecutionSessionId,
+                        startupNotAcknowledged: true), "Uncertain execution identity was not retained.");
                     True(!coordinator.TryStart("test-never-start", "overlap.py", true, out _),
                         "An uncertain startup released its Rhino execution slot.");
-                    True(coordinator.RequestCancellation("test-never-start", out var cancelled) &&
-                        ReferenceEquals(execution, cancelled),
+                    var cancellation = coordinator.RequestCancellation("test-never-start");
+                    True(cancellation.Status == CancellationRequestStatus.Requested &&
+                        ReferenceEquals(execution, cancellation.Execution),
                         "Cancellation was not routed to the uncertain execution.");
                     True(File.Exists(Path.Combine(preserved!, "cancel.requested")),
                         "Cancellation sentinel was not written for the uncertain execution.");
@@ -434,13 +443,246 @@ namespace RhinoVSBridge
                     "Overlapping execution in the same Rhino instance was accepted.");
                 True(coordinator.TryStart("pipe-b", "legacy.py2", false, out var second) && second != null,
                     "A different Rhino instance should have its own execution slot.");
-                True(coordinator.RequestCancellation("pipe-a", out var cancelled) && ReferenceEquals(first, cancelled),
+                var cancellation = coordinator.RequestCancellation("pipe-a");
+                True(cancellation.Status == CancellationRequestStatus.Requested &&
+                    ReferenceEquals(first, cancellation.Execution),
                     "CPython cancellation was not routed to the selected instance.");
                 True(first!.Cancellation.IsCancellationRequested, "Cancellation token was not signalled.");
-                True(!coordinator.RequestCancellation("pipe-b", out var legacy) && legacy != null && !legacy.CanCancel,
+                var legacyCancellation = coordinator.RequestCancellation("pipe-b");
+                True(legacyCancellation.Status == CancellationRequestStatus.CannotCancel &&
+                    legacyCancellation.Execution != null && !legacyCancellation.Execution.CanCancel,
                     "Legacy .py2 cancellation must be refused safely.");
                 coordinator.Complete(first);
                 coordinator.Complete(second!);
+            }
+            return Task.CompletedTask;
+        }
+
+        private static async Task TestLateSuccessfulCompletion()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-late-success-" + Guid.NewGuid());
+            Directory.CreateDirectory(root);
+            try
+            {
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    var timedOut = await CreateTimedOutExecutionAsync(coordinator, root, "test-never-start");
+                    var monitor = coordinator.MonitorUncertainAsync(timedOut.Execution,
+                        TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(2), CancellationToken.None);
+                    await Task.Delay(60);
+                    WriteTerminalResult(timedOut.Workspace, timedOut.SessionId, timedOut.Execution.PipeId,
+                        success: true, cancelled: false, stdout: "late success");
+
+                    var reconciliation = await monitor;
+                    Equal(ExecutionReconciliationStatus.Completed, reconciliation.Status);
+                    True(reconciliation.Result?.Success == true, "Late success result was not retained.");
+                    True(coordinator.TryStart(timedOut.Execution.PipeId, "next.py", true, out var retry) && retry != null,
+                        "Late success did not release the execution slot.");
+                    coordinator.Complete(retry!);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        private static async Task TestLateFailedCompletion()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-late-failure-" + Guid.NewGuid());
+            Directory.CreateDirectory(root);
+            try
+            {
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    var timedOut = await CreateTimedOutExecutionAsync(coordinator, root, "test-never-start");
+                    var monitor = coordinator.MonitorUncertainAsync(timedOut.Execution,
+                        TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(2), CancellationToken.None);
+                    await Task.Delay(60);
+                    WriteTerminalResult(timedOut.Workspace, timedOut.SessionId, timedOut.Execution.PipeId,
+                        success: false, cancelled: false, stderr: "late traceback");
+
+                    var reconciliation = await monitor;
+                    Equal(ExecutionReconciliationStatus.Completed, reconciliation.Status);
+                    True(reconciliation.Result != null && !reconciliation.Result.Success &&
+                        !reconciliation.Result.Cancelled, "Late failure was not terminal.");
+                    Contains("late traceback", reconciliation.Result!.StandardError);
+                    True(coordinator.TryStart(timedOut.Execution.PipeId, "next.py", true, out var retry) && retry != null,
+                        "Late failure did not release the execution slot.");
+                    coordinator.Complete(retry!);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        private static async Task TestCancellationBeforeDelayedStart()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-cancel-before-start-" + Guid.NewGuid());
+            Directory.CreateDirectory(root);
+            try
+            {
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    var uncertain = CreateUncertainExecution(coordinator, root, "pipe-cancel-before", true);
+                    var cancellation = coordinator.RequestCancellation(uncertain.Execution.PipeId);
+                    Equal(CancellationRequestStatus.Requested, cancellation.Status);
+                    True(File.Exists(Path.Combine(uncertain.Workspace.DirectoryPath, "cancel.requested")),
+                        "Delayed-start cancellation marker was not written.");
+
+                    var monitor = coordinator.MonitorUncertainAsync(uncertain.Execution,
+                        TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(2), CancellationToken.None);
+                    WriteTerminalResult(uncertain.Workspace.DirectoryPath, uncertain.Workspace.SessionId,
+                        uncertain.Execution.PipeId, success: false, cancelled: true,
+                        stderr: "Cancellation requested from Visual Studio");
+                    var reconciliation = await monitor;
+                    Equal(ExecutionReconciliationStatus.Completed, reconciliation.Status);
+                    True(reconciliation.Result?.Cancelled == true,
+                        "Delayed runner cancellation was not reconciled as terminal.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        private static Task TestCancellationAfterCompletion()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-cancel-after-complete-" + Guid.NewGuid());
+            Directory.CreateDirectory(root);
+            try
+            {
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    var uncertain = CreateUncertainExecution(coordinator, root, "pipe-cancel-after", true);
+                    WriteTerminalResult(uncertain.Workspace.DirectoryPath, uncertain.Workspace.SessionId,
+                        uncertain.Execution.PipeId, success: true, cancelled: false);
+
+                    var cancellation = coordinator.RequestCancellation(uncertain.Execution.PipeId);
+                    Equal(CancellationRequestStatus.AlreadyCompleted, cancellation.Status);
+                    True(cancellation.Reconciliation?.Status == ExecutionReconciliationStatus.Completed,
+                        "Completion was not returned to the cancellation caller.");
+                    True(!File.Exists(Path.Combine(uncertain.Workspace.DirectoryPath, "cancel.requested")),
+                        "Cancellation marker was created after terminal completion.");
+                    True(coordinator.TryStart(uncertain.Execution.PipeId, "next.py", true, out var retry) && retry != null,
+                        "Completion discovered during cancellation did not release the slot.");
+                    coordinator.Complete(retry!);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+            return Task.CompletedTask;
+        }
+
+        private static Task TestInvalidCompletionArtifacts()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-invalid-results-" + Guid.NewGuid());
+            Directory.CreateDirectory(root);
+            try
+            {
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    var uncertain = CreateUncertainExecution(coordinator, root, "pipe-invalid", true);
+                    var missing = coordinator.TryReconcile(uncertain.Execution);
+                    Equal(ExecutionReconciliationStatus.Pending, missing.Status);
+                    Equal(CompletionArtifactStatus.Missing, missing.ArtifactStatus);
+
+                    File.WriteAllText(uncertain.Workspace.ResultPath, "{not-json");
+                    var malformed = coordinator.TryReconcile(uncertain.Execution);
+                    Equal(ExecutionReconciliationStatus.Pending, malformed.Status);
+                    Equal(CompletionArtifactStatus.UnreadableOrMalformed, malformed.ArtifactStatus);
+
+                    WriteTerminalResult(uncertain.Workspace.DirectoryPath, "wrong-session",
+                        uncertain.Execution.PipeId, success: true, cancelled: false);
+                    var mismatched = coordinator.TryReconcile(uncertain.Execution);
+                    Equal(ExecutionReconciliationStatus.Pending, mismatched.Status);
+                    Equal(CompletionArtifactStatus.IdentityMismatch, mismatched.ArtifactStatus);
+                    True(!coordinator.TryStart(uncertain.Execution.PipeId, "unsafe.py", true, out _),
+                        "Invalid completion artifact released the safety lock.");
+                    coordinator.Complete(uncertain.Execution);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+            return Task.CompletedTask;
+        }
+
+        private static async Task TestCompletionCancellationRace()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-completion-race-" + Guid.NewGuid());
+            Directory.CreateDirectory(root);
+            try
+            {
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    var uncertain = CreateUncertainExecution(coordinator, root, "pipe-race", true);
+                    var monitor = coordinator.MonitorUncertainAsync(uncertain.Execution,
+                        TimeSpan.FromMilliseconds(10), TimeSpan.FromSeconds(2), CancellationToken.None);
+                    var writer = Task.Run(async () =>
+                    {
+                        await Task.Delay(10);
+                        WriteTerminalResult(uncertain.Workspace.DirectoryPath, uncertain.Workspace.SessionId,
+                            uncertain.Execution.PipeId, success: true, cancelled: false);
+                    });
+                    var cancellation = coordinator.RequestCancellation(uncertain.Execution.PipeId);
+                    await writer;
+                    var reconciliation = await monitor;
+
+                    True(cancellation.Status == CancellationRequestStatus.Requested ||
+                        cancellation.Status == CancellationRequestStatus.AlreadyCompleted,
+                        "Race returned an invalid cancellation state.");
+                    True(reconciliation.Status == ExecutionReconciliationStatus.Completed ||
+                        reconciliation.Status == ExecutionReconciliationStatus.NoLongerActive,
+                        "Race did not converge to one terminal reconciliation.");
+                    True(coordinator.Find(uncertain.Execution.PipeId) == null,
+                        "Race left the completed execution active.");
+                    True(coordinator.TryStart(uncertain.Execution.PipeId, "next.py", true, out var retry) && retry != null,
+                        "Race did not release the execution slot.");
+                    coordinator.Complete(retry!);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        private static Task TestReconciliationInstanceIsolation()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-instance-isolation-" + Guid.NewGuid());
+            Directory.CreateDirectory(root);
+            try
+            {
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    var uncertain = CreateUncertainExecution(coordinator, root, "pipe-a", true);
+                    WriteTerminalResult(uncertain.Workspace.DirectoryPath, uncertain.Workspace.SessionId,
+                        "pipe-b", success: true, cancelled: false);
+                    var wrongInstance = coordinator.TryReconcile(uncertain.Execution);
+                    Equal(ExecutionReconciliationStatus.Pending, wrongInstance.Status);
+                    Equal(CompletionArtifactStatus.IdentityMismatch, wrongInstance.ArtifactStatus);
+                    True(!coordinator.TryStart("pipe-a", "unsafe.py", true, out _),
+                        "A result for another Rhino instance released pipe-a.");
+                    True(coordinator.TryStart("pipe-b", "other.py", true, out var other) && other != null,
+                        "Uncertain pipe-a incorrectly blocked a different Rhino instance.");
+                    coordinator.Complete(other!);
+
+                    WriteTerminalResult(uncertain.Workspace.DirectoryPath, uncertain.Workspace.SessionId,
+                        uncertain.Execution.PipeId, success: true, cancelled: false);
+                    Equal(ExecutionReconciliationStatus.Completed,
+                        coordinator.TryReconcile(uncertain.Execution).Status);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
             }
             return Task.CompletedTask;
         }
@@ -499,6 +741,48 @@ namespace RhinoVSBridge
             }
         }
 
+        private static async Task<(ActiveRhinoExecution Execution, string Workspace, string SessionId)>
+            CreateTimedOutExecutionAsync(RhinoExecutionCoordinator coordinator, string root, string pipeId)
+        {
+            var script = CreateScriptFixture(root);
+            True(coordinator.TryStart(pipeId, script, true, out var execution) && execution != null,
+                "Timed-out execution slot was not acquired.");
+            var executable = Environment.ProcessPath ?? throw new Exception("Test executable path unavailable.");
+            var result = await RhinoExecutionRunner.RunAsync(new RhinoCli(executable), script, pipeId, null,
+                execution!.Cancellation.Token, TimeSpan.FromMilliseconds(250), root);
+            True(result.StartupTimedOut && result.PreservedWorkspace != null &&
+                result.ExecutionSessionId != null, "Synthetic execution did not reach startup timeout.");
+            True(coordinator.MarkUncertain(execution, result.PreservedWorkspace, result.ExecutionSessionId,
+                startupNotAcknowledged: true), "Timed-out execution identity was not retained.");
+            return (execution, result.PreservedWorkspace!, result.ExecutionSessionId!);
+        }
+
+        private static (ActiveRhinoExecution Execution, ExecutionWorkspace Workspace) CreateUncertainExecution(
+            RhinoExecutionCoordinator coordinator, string root, string pipeId, bool startupNotAcknowledged)
+        {
+            var script = CreateScriptFixture(root);
+            True(coordinator.TryStart(pipeId, script, true, out var execution) && execution != null,
+                "Uncertain execution slot was not acquired.");
+            var workspace = ExecutionWorkspace.Create(script, pipeId, root);
+            True(coordinator.MarkUncertain(execution!, workspace.DirectoryPath, workspace.SessionId,
+                startupNotAcknowledged), "Uncertain execution identity was not retained.");
+            return (execution!, workspace);
+        }
+
+        private static void WriteTerminalResult(string workspace, string sessionId, string pipeId,
+            bool success, bool cancelled, string stdout = "", string stderr = "")
+        {
+            var resultPath = Path.Combine(workspace, "result.json");
+            var temporary = resultPath + ".test-" + Guid.NewGuid().ToString("N");
+            var json = "{\"sessionId\":\"" + sessionId + "\",\"pipeId\":\"" + pipeId +
+                "\",\"success\":" + (success ? "true" : "false") +
+                ",\"cancelled\":" + (cancelled ? "true" : "false") +
+                ",\"stdout\":\"" + stdout + "\",\"stderr\":\"" + stderr + "\"}";
+            File.WriteAllText(temporary, json);
+            if (File.Exists(resultPath)) File.Delete(resultPath);
+            File.Move(temporary, resultPath);
+        }
+
         private static string CreateScriptFixture(string root)
         {
             Directory.CreateDirectory(root);
@@ -535,18 +819,29 @@ namespace RhinoVSBridge
                 await Task.Delay(300);
                 File.WriteAllText(Path.Combine(workspace, "started.json"), "{\"started\":true}");
                 await Task.Delay(900);
-                File.WriteAllText(Path.Combine(workspace, "result.json"),
-                    "{\"success\":true,\"cancelled\":false,\"stdout\":\"delayed\",\"stderr\":\"\"}");
+                var identity = ReadWorkspaceIdentity(workspace);
+                WriteTerminalResult(workspace, identity.SessionId, pipeId,
+                    success: true, cancelled: false, stdout: "delayed");
                 return 0;
             }
             if (pipeId == "test-start-success")
             {
                 File.WriteAllText(Path.Combine(workspace, "started.json"), "{\"started\":true}");
-                File.WriteAllText(Path.Combine(workspace, "result.json"),
-                    "{\"success\":true,\"cancelled\":false,\"stdout\":\"started\",\"stderr\":\"\"}");
+                var identity = ReadWorkspaceIdentity(workspace);
+                WriteTerminalResult(workspace, identity.SessionId, pipeId,
+                    success: true, cancelled: false, stdout: "started");
                 return 0;
             }
             return 42;
+        }
+
+        private static (string SessionId, string PipeId) ReadWorkspaceIdentity(string workspace)
+        {
+            var values = File.ReadAllLines(Path.Combine(workspace, "session.txt"))
+                .Select(line => line.Split(new[] { '=' }, 2))
+                .Where(parts => parts.Length == 2)
+                .ToDictionary(parts => parts[0], parts => parts[1], StringComparer.Ordinal);
+            return (values["sessionId"], values["pipeId"]);
         }
 
 

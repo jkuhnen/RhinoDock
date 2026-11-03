@@ -21,6 +21,14 @@ namespace RhinoVSBridge
         public string Text { get; set; } = string.Empty;
     }
 
+    internal enum CompletionArtifactStatus
+    {
+        Missing,
+        UnreadableOrMalformed,
+        IdentityMismatch,
+        Valid
+    }
+
     internal static class RhinoExecutionRunner
     {
         private const int PollIntervalMs = 100;
@@ -80,8 +88,10 @@ namespace RhinoVSBridge
                         await output.ForwardAvailableAsync(onOutput).ConfigureAwait(false);
                         if (!startupAcknowledged && File.Exists(workspace.StartupPath))
                             startupAcknowledged = true;
-                        captured = TryReadResult(workspace.ResultPath);
-                        if (captured != null) break;
+                        var completionStatus = TryReadResult(workspace.ResultPath, workspace.SessionId,
+                            pipeId, out captured);
+                        if (completionStatus == CompletionArtifactStatus.Valid) break;
+                        captured = null;
 
                         if (process.HasExited && process.ExitCode != 0)
                         {
@@ -107,7 +117,8 @@ namespace RhinoVSBridge
                                     StandardOutput = interruptedOut,
                                     StandardError = interruptedError,
                                     ExecutionInterrupted = true,
-                                    PreservedWorkspace = workspace.DirectoryPath
+                                    PreservedWorkspace = workspace.DirectoryPath,
+                                    ExecutionSessionId = workspace.SessionId
                                 };
                             }
                         }
@@ -137,7 +148,8 @@ namespace RhinoVSBridge
                                     startupLimit.TotalSeconds.ToString("0.###") + " seconds."),
                                 StartupTimedOut = true,
                                 ExecutionInterrupted = true,
-                                PreservedWorkspace = workspace.DirectoryPath
+                                PreservedWorkspace = workspace.DirectoryPath,
+                                ExecutionSessionId = workspace.SessionId
                             };
                         }
                         await Task.Delay(PollIntervalMs).ConfigureAwait(false);
@@ -154,12 +166,14 @@ namespace RhinoVSBridge
                     await Task.Run(() => process.WaitForExit()).ConfigureAwait(false);
                     var stdout = await cliStdout.ConfigureAwait(false);
                     var stderr = await cliStderr.ConfigureAwait(false);
+                    var finalCapture = captured ?? throw new InvalidOperationException(
+                        "The terminal Rhino result disappeared during finalization.");
                     return new CommandResult
                     {
-                        ExitCode = captured.Cancelled ? 2 : (captured.Success ? 0 : 1),
-                        StandardOutput = stdout + captured.StandardOutput,
-                        StandardError = stderr + captured.StandardError,
-                        Cancelled = captured.Cancelled
+                        ExitCode = finalCapture.Cancelled ? 2 : (finalCapture.Success ? 0 : 1),
+                        StandardOutput = stdout + finalCapture.StandardOutput,
+                        StandardError = stderr + finalCapture.StandardError,
+                        Cancelled = finalCapture.Cancelled
                     };
                 }
             }
@@ -176,7 +190,8 @@ namespace RhinoVSBridge
                     StandardError = "Execution monitoring failed after the request may have reached Rhino: " +
                         ex.Message,
                     ExecutionInterrupted = true,
-                    PreservedWorkspace = workspace.DirectoryPath
+                    PreservedWorkspace = workspace.DirectoryPath,
+                    ExecutionSessionId = workspace.SessionId
                 };
             }
             finally
@@ -234,19 +249,30 @@ namespace RhinoVSBridge
             };
         }
 
-        internal static ScriptCaptureResult? TryReadResult(string resultPath)
+        internal static CompletionArtifactStatus TryReadResult(string resultPath, string expectedSessionId,
+            string expectedPipeId, out ScriptCaptureResult? result)
         {
-            if (!File.Exists(resultPath)) return null;
+            result = null;
+            if (!File.Exists(resultPath)) return CompletionArtifactStatus.Missing;
             try
             {
                 using (var stream = File.Open(resultPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 {
                     var serializer = new DataContractJsonSerializer(typeof(ScriptCaptureResult));
-                    return (ScriptCaptureResult?)serializer.ReadObject(stream);
+                    result = (ScriptCaptureResult?)serializer.ReadObject(stream);
                 }
             }
-            catch (IOException) { return null; }
-            catch (SerializationException) { return null; }
+            catch (IOException) { return CompletionArtifactStatus.UnreadableOrMalformed; }
+            catch (SerializationException) { return CompletionArtifactStatus.UnreadableOrMalformed; }
+
+            if (result == null) return CompletionArtifactStatus.UnreadableOrMalformed;
+            if (!string.Equals(result.SessionId, expectedSessionId, StringComparison.Ordinal) ||
+                !string.Equals(result.PipeId, expectedPipeId, StringComparison.Ordinal))
+            {
+                result = null;
+                return CompletionArtifactStatus.IdentityMismatch;
+            }
+            return CompletionArtifactStatus.Valid;
         }
 
         internal static string CreateRunner(string scriptPath, ExecutionWorkspace workspace)
@@ -254,13 +280,15 @@ namespace RhinoVSBridge
             string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
             return "import base64, contextlib, io, json, os, sys, threading, tokenize, traceback\n" +
                 $"script_path = base64.b64decode('{Encode(scriptPath)}').decode('utf-8')\n" +
+                $"session_id = base64.b64decode('{Encode(workspace.SessionId)}').decode('utf-8')\n" +
+                $"pipe_id = base64.b64decode('{Encode(workspace.PipeId)}').decode('utf-8')\n" +
                 $"result_path = base64.b64decode('{Encode(workspace.ResultPath)}').decode('utf-8')\n" +
                 $"startup_path = base64.b64decode('{Encode(workspace.StartupPath)}').decode('utf-8')\n" +
                 $"events_path = base64.b64decode('{Encode(workspace.EventsPath)}').decode('utf-8')\n" +
                 $"cancel_path = base64.b64decode('{Encode(workspace.CancellationPath)}').decode('utf-8')\n" +
                 "temporary_startup = startup_path + '.tmp'\n" +
                 "with open(temporary_startup, 'w', encoding='utf-8') as startup_file:\n" +
-                "    json.dump({'started': True}, startup_file)\n" +
+                "    json.dump({'started': True, 'sessionId': session_id, 'pipeId': pipe_id}, startup_file)\n" +
                 "    startup_file.flush()\n" +
                 "    os.fsync(startup_file.fileno())\n" +
                 "os.replace(temporary_startup, startup_path)\n" +
@@ -319,7 +347,7 @@ namespace RhinoVSBridge
                 "        del sys.path[0]\n" +
                 "    events_file.flush()\n" +
                 "    events_file.close()\n" +
-                "    payload = {'success': success, 'cancelled': cancelled, 'stdout': stdout_buffer.getvalue(), 'stderr': stderr_buffer.getvalue()}\n" +
+                "    payload = {'sessionId': session_id, 'pipeId': pipe_id, 'success': success, 'cancelled': cancelled, 'stdout': stdout_buffer.getvalue(), 'stderr': stderr_buffer.getvalue()}\n" +
                 "    temporary_result = result_path + '.tmp'\n" +
                 "    with open(temporary_result, 'w', encoding='utf-8') as result_file:\n" +
                 "        json.dump(payload, result_file, ensure_ascii=False)\n" +
