@@ -128,6 +128,11 @@ python tools\probe_intellisense.py
 - The v0.3.1 VSIX was tested with Visual Studio 2026 and Rhino 8.36. Failed `rhinocode.exe` launch recovery, scripts longer than 15 seconds, delayed Rhino-side startup detection, startup-timeout workspace retention, cooperative cancellation before delayed startup, and overlap prevention all passed.
 - The v0.3.2 VSIX was tested with Visual Studio 2026 and Rhino 8.36. After Rhino was blocked for about 60 seconds, the bridge reported the 15-second startup timeout, preserved the uncertain execution lock, rejected overlap with an accurate diagnostic, then accepted the delayed terminal result, released the slot automatically, and permitted a follow-up run without restarting Visual Studio.
 - The v0.4.0 VSIX was tested with Visual Studio 2026 and Rhino 8.36. Python runtime exceptions appeared in the native Error List; double-click opened the correct source file and line through nested Python calls and for files outside the current solution. A successful follow-up execution cleared stale Rhino VS Bridge entries while the complete original traceback remained in the Output pane.
+- The final v0.4.0 package installed successfully in a regular, non-experimental
+  Visual Studio 2026 instance with Rhino 8.36. All six commands, connection
+  diagnostics, Shift+F2 execution, RhinoCommon/rhinoscriptsyntax/scriptcontext
+  IntelliSense, and Python Error List navigation passed. After the navigation
+  correction, a traceback reported and navigated to line 7 exactly.
 - See [the end-to-end verification report](docs/end-to-end-workflow-vs2026.md) for the fixtures, checks, and limitations.
 
 ### Still to test or fix

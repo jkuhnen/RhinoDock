@@ -43,6 +43,17 @@ Studio instance. Uninstall it later from **Extensions > Manage Extensions**.
 If no Python project is selected, the configuration command copies the paths
 to the clipboard instead of changing a project.
 
+### First-run IntelliSense note
+
+In the final Visual Studio 2026 and Rhino 8.36 installation test, completion for
+`RhinoCommon`, `rhinoscriptsyntax`, and `scriptcontext` appeared after
+running **Rhino: Configure Project IntelliSense** and then performing the first
+**Shift+F2** execution. This is the observed first-run sequence, not evidence
+that script execution is technically required to activate IntelliSense. If
+completion does not appear immediately after configuration, close and reopen
+the solution, confirm Pylance has reloaded the project search paths, and perform
+one normal bridge execution before investigating further.
+
 ## Run scripts and inspect errors
 
 1. Open a saved `.py` file in the Visual Studio editor.
@@ -73,3 +84,17 @@ integration.
 - Error navigation with Unicode and punctuation is covered by automated tests;
   the complete special-character path case still needs a normal-instance GUI
   verification.
+
+## Verified normal-instance workflow
+
+The final v0.4.0 VSIX passed manual installation testing in a regular,
+non-experimental Visual Studio 2026 instance with Rhino 8.36:
+
+- installation through the normal Visual Studio VSIX Installer;
+- registration of all six **Rhino:** commands;
+- Rhino connection and stub diagnostics;
+- execution through **Shift+F2**;
+- completion for RhinoCommon, `rhinoscriptsyntax`, and `scriptcontext`;
+- Python runtime errors in the Error List; and
+- double-click navigation to the exact traceback line, including the line 7
+  regression case.
