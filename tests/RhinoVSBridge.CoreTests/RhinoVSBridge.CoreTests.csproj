@@ -13,5 +13,6 @@
     <Compile Include="..\..\src\RhinoVSBridge\ExecutionWorkspace.cs" Link="Product\ExecutionWorkspace.cs" />
     <Compile Include="..\..\src\RhinoVSBridge\RhinoExecutionCoordinator.cs" Link="Product\RhinoExecutionCoordinator.cs" />
     <Compile Include="..\..\src\RhinoVSBridge\RhinoExecutionRunner.cs" Link="Product\RhinoExecutionRunner.cs" />
+    <Compile Include="..\..\src\RhinoVSBridge\PythonTracebackParser.cs" Link="Product\PythonTracebackParser.cs" />
   </ItemGroup>
 </Project>

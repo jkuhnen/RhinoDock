@@ -43,6 +43,6 @@ jobs:
       - name: Publish VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RhinoVSBridge-v0.3.2-${{ github.sha }}
+          name: RhinoVSBridge-v0.4.0-${{ github.sha }}
           path: src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix
           if-no-files-found: error

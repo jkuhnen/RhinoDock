@@ -15,7 +15,7 @@ using Task = System.Threading.Tasks.Task;
 namespace RhinoVSBridge
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("Rhino VS Bridge", "Rhino 8 CPython execution for Visual Studio", "0.3.2")]
+    [InstalledProductRegistration("Rhino VS Bridge", "Rhino 8 CPython execution for Visual Studio", "0.4.0")]
     [ProvideMenuResource("RhinoVSBridge.CTMENU", 1)]
     [Guid(PackageGuid)]
     public sealed class BridgePackage : AsyncPackage
@@ -30,6 +30,7 @@ namespace RhinoVSBridge
         private bool _running;
         private DTE2? _dte;
         private OutputWindowPane? _output;
+        private RhinoErrorList? _errors;
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
@@ -37,6 +38,7 @@ namespace RhinoVSBridge
             var dte = await GetServiceAsync(typeof(DTE)) as DTE2;
             if (dte == null) return;
             _dte = dte;
+            _errors = new RhinoErrorList(this);
             var commands = await GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (commands == null) return;
             Register(commands, 0x0100, RunActiveAsync);
@@ -142,6 +144,7 @@ namespace RhinoVSBridge
                     await LogAsync(message + "\r\n");
                     throw new InvalidOperationException(message);
                 }
+                await ClearPythonErrorsAsync();
                 var executionFinalized = false;
                 try
                 {
@@ -190,6 +193,7 @@ namespace RhinoVSBridge
                     }
                     if (!result.Succeeded)
                     {
+                        await PublishPythonErrorsAsync(result.StandardError);
                         if (!await IsInstanceAvailableAsync(pipeId))
                         {
                             _pipeId = null;
@@ -285,7 +289,18 @@ namespace RhinoVSBridge
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _executions.Dispose();
+            if (disposing)
+            {
+                _executions.Dispose();
+                if (_errors != null)
+                {
+                    JoinableTaskFactory.Run(async () =>
+                    {
+                        await JoinableTaskFactory.SwitchToMainThreadAsync();
+                        _errors.Dispose();
+                    });
+                }
+            }
             base.Dispose(disposing);
         }
 
@@ -307,7 +322,10 @@ namespace RhinoVSBridge
             else if (result.Success)
                 await LogAsync("\r\nLate execution completed successfully.\r\n");
             else
+            {
+                await PublishPythonErrorsAsync(result.StandardError);
                 await LogAsync("\r\nLate execution completed with a Python failure.\r\n");
+            }
             await LogAsync("Execution slot released and ready for another run.\r\n");
 
             if (!string.IsNullOrWhiteSpace(reconciliation.Workspace) &&
@@ -465,6 +483,40 @@ namespace RhinoVSBridge
             }
             _output.OutputString(message);
             _output.Activate();
+        }
+
+        private async Task PublishPythonErrorsAsync(string tracebackText)
+        {
+            var traceback = PythonTracebackParser.Parse(tracebackText);
+            if (traceback.UserFacingFrames.Count == 0) return;
+
+            try
+            {
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                var count = _errors?.Publish(traceback) ?? 0;
+                if (count > 0)
+                    await LogAsync("Published " + count +
+                        " navigable Python traceback location(s) to Error List > Rhino VS Bridge.\r\n");
+            }
+            catch (Exception ex)
+            {
+                await LogAsync("Python traceback navigation could not be published; " +
+                    "the complete traceback remains above: " + ex.Message + "\r\n");
+            }
+        }
+
+        private async Task ClearPythonErrorsAsync()
+        {
+            try
+            {
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                _errors?.Clear();
+            }
+            catch (Exception ex)
+            {
+                await LogAsync("Stale Rhino VS Bridge Error List entries could not be cleared: " +
+                    ex.Message + "\r\n");
+            }
         }
 
         private static OutputWindowPane GetOrCreateOutputPane(OutputWindowPanes panes)

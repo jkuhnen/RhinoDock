@@ -21,6 +21,7 @@ Visual Studio 2026 (PTVS Python editor)
          Rhino 8 (StartScriptServer enabled)
               | CPython 3 for .py, IronPython for .py2
               +--> original .py, stdout/stderr, traceback and result
+              +--> Visual Studio Error List tasks for Python traceback frames
               +--> model, command history, Rhino runtime
 ```
 
@@ -55,6 +56,7 @@ src\RhinoVSBridge\bin\Debug\net48\RhinoVSBridge.vsix
 5. Choose **Tools > Rhino: Run Active Python Script**. Unsaved edits in the active document are saved automatically. Output is shown in **Output > Rhino VS Bridge**. If more than one Rhino instance is found, choose the target.
 6. Press **Shift+F2** in the text editor to save and run the active script. The default command binding is `Tools.RhinoRunActivePythonScript` in the **Text Editor** scope. If an existing extension or personal setting already owns Shift+F2, reassign that command under **Tools > Options > Environment > Keyboard**.
 7. For a running CPython script, choose **Tools > Rhino: Cancel Running Script**. Cancellation is cooperative and is acknowledged only after execution inside Rhino reaches a Python trace point.
+8. When Rhino reports a Python exception, open **View > Error List**. Entries whose descriptions begin **Rhino VS Bridge:** navigate to the reported Python frame when double-clicked, including files outside the current solution.
 
 ### IntelliSense reality check
 
@@ -92,8 +94,8 @@ python tools\probe_intellisense.py
 - NuGet restore and `Debug | Any CPU` rebuild with Visual Studio Community 2026 18.11: **passed**, 0 warnings and 0 errors.
 - Command-line build with Visual Studio 2022: **passed**. Loading the VSIX in Visual Studio 2022 is not yet verified.
 - VSIX packaging: **passed**. The package contains `extension.vsixmanifest`, `RhinoVSBridge.dll`, and `RhinoVSBridge.pkgdef`; the compiled command table is embedded in the package assembly.
-- Portable Python tests: **15/15 passed** with `python -m unittest discover -s tests -v`.
-- Product C# tests: **27/27 passed**. They link the actual execution, target-selection, workspace, coordination, and IntelliSense path-management sources.
+- Portable Python tests: **17/17 passed** with `python -m unittest discover -s tests -v`.
+- Product C# tests: **31/31 passed**. They link the actual execution, target-selection, workspace, coordination, traceback parsing, and IntelliSense path-management sources.
 - Release CI: **configured** on GitHub's Visual Studio 2026 Windows image and uploads the Release VSIX as a workflow artifact.
 - Default shortcut contract: Visual Studio exposed `Tools.RhinoRunActivePythonScript` as `Text Editor::Shift+F2`.
 - Rhino execution integration: the product C# implementation captured Unicode output and an intentional traceback with the original file and line number.
@@ -102,8 +104,9 @@ python tools\probe_intellisense.py
 - `examples/hello_rhino.py` executed through the official RhinoCode CLI in Rhino CPython 3, and the integration verifier confirmed exactly one point was added.
 - CLI quoting with a script path containing spaces is covered by an automated test and passed.
 - IntelliSense import-layout probe: **passed** for Rhino, Rhino.Geometry, Point3d/Origin, rhinoscriptsyntax/AddLine, scriptcontext shim, and the local module.
+- Version 0.4 parses Python traceback frames and publishes package-owned Visual Studio Error List tasks with zero-based navigation coordinates.
 
-### Actual GUI checks (through v0.3.2)
+### Actual GUI checks (through v0.4.0)
 
 - The VSIX loaded in a Visual Studio 2026 experimental instance.
 - All five `Rhino:` commands were present under **Tools**.
@@ -121,6 +124,7 @@ python tools\probe_intellisense.py
 - The v0.3.0 VSIX was tested with Visual Studio 2026 and Rhino 8.35. Live output, cooperative cancellation, restart after cancellation, Python tracebacks, RhinoCommon geometry creation, and prevention of overlapping executions all passed.
 - The v0.3.1 VSIX was tested with Visual Studio 2026 and Rhino 8.36. Failed `rhinocode.exe` launch recovery, scripts longer than 15 seconds, delayed Rhino-side startup detection, startup-timeout workspace retention, cooperative cancellation before delayed startup, and overlap prevention all passed.
 - The v0.3.2 VSIX was tested with Visual Studio 2026 and Rhino 8.36. After Rhino was blocked for about 60 seconds, the bridge reported the 15-second startup timeout, preserved the uncertain execution lock, rejected overlap with an accurate diagnostic, then accepted the delayed terminal result, released the slot automatically, and permitted a follow-up run without restarting Visual Studio.
+- The v0.4.0 VSIX was tested with Visual Studio 2026 and Rhino 8.36. Python runtime exceptions appeared in the native Error List; double-click opened the correct source file and line through nested Python calls and for files outside the current solution. A successful follow-up execution cleared stale Rhino VS Bridge entries while the complete original traceback remained in the Output pane.
 - See [the end-to-end verification report](docs/end-to-end-workflow-vs2026.md) for the fixtures, checks, and limitations.
 
 ### Still to test or fix
@@ -128,7 +132,7 @@ python tools\probe_intellisense.py
 - Improve the PTVS/Pylance refresh path: Project Reload displayed the new paths but Pylance 2026.3.1 retained its prior settings. A clean solution restart is currently required.
 - Go to Definition through `rhinoscriptsyntax`'s star re-export was not confirmed; Point3d definition navigation is verified.
 - `.py2` uses direct legacy CLI execution and does not yet return Python output or exception details to Visual Studio.
-- Tracebacks retain the original `.py` path and line but can include one capture-runner frame; clickable traceback navigation is not implemented.
+- Validate Error List navigation with a Unicode/special-character path in the real Visual Studio GUI; external-file navigation itself is verified.
 - CPython cancellation is cooperative; native calls are not forcibly interrupted, and legacy `.py2` cannot be cancelled safely.
 - Install and load the generated VSIX in Visual Studio 2022; its command-line build is already passing.
 - Incomplete execution workspaces are intentionally retained because Rhino may still be using them. Version 0.3.2 automatically reconciles a matching terminal result for 10 minutes and rechecks on Run or Cancel; permanently missing or malformed results remain blocked.
@@ -151,7 +155,8 @@ python tools\probe_intellisense.py
 - [x] Add identity-validated automatic reconciliation, completion-aware cancellation, and state-specific diagnostics for v0.3.2.
 - [x] Add Windows CI producing an installable `.vsix` artifact.
 - [x] Perform the controlled v0.3.2 late-completion reconciliation GUI checks.
-- [ ] Add clickable traceback navigation.
+- [x] Add package-owned Error List integration and Python traceback navigation for v0.4.
+- [x] Perform the controlled v0.4 Error List and external-file navigation GUI checks.
 
 ## References
 
@@ -160,8 +165,9 @@ python tools\probe_intellisense.py
 - VS 2026 SDK-style VSIX: https://devblogs.microsoft.com/visualstudio/sdk-style-support-for-extension-projects/
 - VS 2022/2026 compatibility: https://learn.microsoft.com/en-us/visualstudio/extensibility/migration/extension-compatibility
 - Visual Studio PTVS Search Paths: https://learn.microsoft.com/en-us/visualstudio/python/search-paths
+- [v0.4 Python error navigation design and GUI checklist](docs/python-error-navigation-v04.md)
 - Original extension (reference only): https://github.com/jingcheng-chen/RhinoPythonForVS
 
 ## Notes for Codex
 
-Read `AGENTS.md`. Keep subsequent work on feature branches. IntelliSense, the Visual Studio 2026 end-to-end run workflow, and v0.3.2 execution reliability are verified through Rhino 8.36, including delayed completion after a startup timeout and automatic slot recovery. Do not add interactive debugging until the basic integration remains stable.
+Read `AGENTS.md`. Keep subsequent work on feature branches. IntelliSense, the Visual Studio 2026 end-to-end run workflow, v0.3.2 execution reliability, and v0.4.0 Error List navigation are verified through Rhino 8.36. This includes delayed completion recovery, nested Python calls, external-file navigation, stale-entry clearing, and preservation of the original Output-pane traceback. Do not add interactive debugging until the basic integration remains stable.

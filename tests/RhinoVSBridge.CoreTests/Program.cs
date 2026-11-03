@@ -71,6 +71,10 @@ namespace RhinoVSBridge
                 ("RhinoCode JSON accepts prefixes and added fields", TestInstanceParsing),
                 ("RhinoCode JSON rejects malformed output", TestMalformedInstanceOutput),
                 ("Command output keeps stdout, traceback text, and exit code", TestCommandOutput),
+                ("Python traceback parsing preserves Unicode and special paths", TestTracebackPathParsing),
+                ("Python traceback parsing selects the innermost user frame", TestTracebackFrameSelection),
+                ("Python traceback parsing handles chained exceptions", TestChainedTracebacks),
+                ("Malformed tracebacks are ignored and line conversion is zero-based", TestMalformedTracebacks),
                 ("Missing RhinoCode executable produces actionable error", TestMissingExecutable),
                 ("Target selection never falls back from a disconnected explicit instance", TestTargetSelection),
                 ("Search path reconciliation removes only obsolete Rhino paths", TestPathReconciliation),
@@ -166,6 +170,82 @@ namespace RhinoVSBridge
             Contains("printed before failure", result.DisplayText);
             Contains("Traceback", result.DisplayText);
             Contains("[rhinocode exit code: 7]", result.DisplayText);
+            return Task.CompletedTask;
+        }
+
+        private static Task TestTracebackPathParsing()
+        {
+            const string path = @"C:\Test User\Grüße 世界\special [x], & error_test.py";
+            var traceback = PythonTracebackParser.Parse(
+                "Traceback (most recent call last):\r\n" +
+                "  File \"" + path + "\", line 7, in <module>\r\n" +
+                "    raise RuntimeError('boom')\r\n" +
+                "RuntimeError: RhinoVSBridge error handling test\r\n");
+
+            Equal(1, traceback.Frames.Count);
+            Equal(1, traceback.UserFacingFrames.Count);
+            Equal(path, traceback.PrimaryFrame?.FilePath);
+            Equal(7, traceback.PrimaryFrame?.PythonLineNumber);
+            Equal(6, traceback.PrimaryFrame?.VisualStudioLineNumber);
+            Equal("<module>", traceback.PrimaryFrame?.FunctionName);
+            Equal("RuntimeError: RhinoVSBridge error handling test", traceback.ExceptionMessage);
+            return Task.CompletedTask;
+        }
+
+        private static Task TestTracebackFrameSelection()
+        {
+            var traceback = PythonTracebackParser.Parse(
+                "Traceback (most recent call last):\n" +
+                "  File \"C:\\Temp\\session\\bridge_runner.py\", line 64, in <module>\n" +
+                "    exec(code, scope, scope)\n" +
+                "  File \"D:\\Scripts\\main script.py\", line 5, in <module>\n" +
+                "    helper.fail()\n" +
+                "  File \"D:\\Scripts\\helper.py\", line 12, in fail\n" +
+                "    raise ValueError('bad')\n" +
+                "ValueError: bad\n");
+
+            Equal(3, traceback.Frames.Count);
+            True(traceback.Frames[0].IsInternalRunner, "The generated runner frame was not identified.");
+            Equal(2, traceback.UserFacingFrames.Count);
+            Equal(@"D:\Scripts\helper.py", traceback.PrimaryFrame?.FilePath);
+            Equal(12, traceback.PrimaryFrame?.PythonLineNumber);
+            Equal(@"D:\Scripts\main script.py", traceback.UserFacingFrames[1].FilePath);
+            return Task.CompletedTask;
+        }
+
+        private static Task TestChainedTracebacks()
+        {
+            var traceback = PythonTracebackParser.Parse(
+                "Traceback (most recent call last):\n" +
+                "  File \"C:\\Scripts\\first.py\", line 2, in first\n" +
+                "ValueError: first failure\n\n" +
+                "The above exception was the direct cause of the following exception:\n\n" +
+                "Traceback (most recent call last):\n" +
+                "  File \"C:\\Scripts\\second.py\", line 9, in second\n" +
+                "RuntimeError: final failure\n");
+
+            Equal(2, traceback.Frames.Count);
+            Equal(@"C:\Scripts\second.py", traceback.PrimaryFrame?.FilePath);
+            Equal("RuntimeError: final failure", traceback.ExceptionMessage);
+            return Task.CompletedTask;
+        }
+
+        private static Task TestMalformedTracebacks()
+        {
+            var malformed = PythonTracebackParser.Parse(
+                "Traceback maybe\n  File \"\", line nope\nnot a Python traceback");
+            Equal(0, malformed.Frames.Count);
+            Equal(0, malformed.UserFacingFrames.Count);
+
+            var pseudo = PythonTracebackParser.Parse(
+                "Traceback (most recent call last):\n" +
+                "  File \"<string>\", line 3, in <module>\n" +
+                "RuntimeError: hidden\n");
+            Equal(1, pseudo.Frames.Count);
+            Equal(0, pseudo.UserFacingFrames.Count);
+            Equal(0, PythonTracebackParser.ToVisualStudioLine(0));
+            Equal(0, PythonTracebackParser.ToVisualStudioLine(1));
+            Equal(6, PythonTracebackParser.ToVisualStudioLine(7));
             return Task.CompletedTask;
         }
 
