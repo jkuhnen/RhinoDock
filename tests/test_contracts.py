@@ -19,12 +19,69 @@ class IntegrationContractTests(unittest.TestCase):
             "SetupIntelliSense": 0x0102,
             "ShowDiagnostics": 0x0103,
             "ChooseExecutable": 0x0104,
+            "CancelActive": 0x0105,
         }
         for name, value in expected.items():
             self.assertEqual(value, sym[name])
         code = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
         for value in expected.values():
             self.assertIn("Register(commands, 0x" + format(value, "04x"), code)
+    def test_run_command_has_shift_f2_text_editor_binding(self):
+
+        tree = ET.parse(ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct")
+        root = tree.getroot()
+        bindings = [node for node in root.iter() if node.tag.endswith("KeyBinding")]
+        run_binding = next(node for node in bindings
+                           if node.attrib.get("id") == "RunActive")
+        self.assertEqual("GUID_TextEditorFactory", run_binding.attrib["editor"])
+        self.assertEqual("VK_F2", run_binding.attrib["key1"])
+        self.assertEqual("Shift", run_binding.attrib["mod1"])
+
+        command_names = [node.text for node in root.iter()
+                         if node.tag.endswith("CommandName")]
+        self.assertIn("RhinoVSBridge.RunActivePythonScript", command_names)
+
+    def test_cpython_runner_captures_output_and_original_tracebacks(self):
+        code = (ROOT / "src/RhinoVSBridge/RhinoExecutionRunner.cs").read_text()
+        self.assertIn("contextlib.redirect_stdout", code)
+        self.assertIn("contextlib.redirect_stderr", code)
+        self.assertIn("compile(source_file.read(), script_path, 'exec')", code)
+        self.assertIn("traceback.print_exc()", code)
+        self.assertIn("sys.path.insert(0, script_directory)", code)
+        self.assertIn("Convert.ToBase64String", code)
+        self.assertIn("sys.settrace(cancellation_trace)", code)
+        self.assertIn("os.replace(temporary_startup, startup_path)", code)
+        self.assertIn("'sessionId': session_id", code)
+        self.assertIn("'pipeId': pipe_id", code)
+        self.assertIn("StartupTimedOut = true", code)
+        self.assertIn("os.replace(temporary_result, result_path)", code)
+
+    def test_startup_timeout_is_separate_and_dispatch_failures_release_state(self):
+        cli = (ROOT / "src/RhinoVSBridge/RhinoCli.cs").read_text()
+        package = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
+        runner = (ROOT / "src/RhinoVSBridge/RhinoExecutionRunner.cs").read_text()
+
+        self.assertIn("ScriptStartupTimeout", cli)
+        self.assertIn("TimeSpan.FromSeconds(15)", cli)
+        self.assertIn("DispatchFailed", runner)
+        self.assertIn("safeToRetry", runner)
+        self.assertIn("if (result.DispatchFailed)", package)
+        self.assertIn("executionFinalized = true", package)
+        self.assertIn("if (result.StartupTimedOut)", package)
+
+    def test_uncertain_execution_reconciliation_requires_terminal_identity(self):
+        coordinator = (ROOT / "src/RhinoVSBridge/RhinoExecutionCoordinator.cs").read_text()
+        package = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
+        runner = (ROOT / "src/RhinoVSBridge/RhinoExecutionRunner.cs").read_text()
+
+        self.assertIn("expectedSessionId", runner)
+        self.assertIn("expectedPipeId", runner)
+        self.assertIn("CompletionArtifactStatus.IdentityMismatch", runner)
+        self.assertIn("MonitorUncertainAsync", coordinator)
+        self.assertIn("CancellationRequestStatus.AlreadyCompleted", coordinator)
+        self.assertIn("ReconciliationMonitorDuration", package)
+        self.assertIn("Execution slot released and ready for another run", package)
+        self.assertNotIn("execution.MarkUncertain(null)", package)
 
     def test_package_requests_the_compiled_command_table_resource(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"

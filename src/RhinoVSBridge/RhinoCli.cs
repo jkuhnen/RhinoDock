@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace RhinoVSBridge
@@ -36,13 +38,61 @@ namespace RhinoVSBridge
         public string? Title { get; set; }
     }
 
+    [DataContract]
+    internal sealed class ScriptCaptureResult
+    {
+        [DataMember(Name = "sessionId")]
+        public string SessionId { get; set; } = "";
+
+        [DataMember(Name = "pipeId")]
+        public string PipeId { get; set; } = "";
+
+        [DataMember(Name = "success")]
+        public bool Success { get; set; }
+
+        [DataMember(Name = "stdout")]
+        public string StandardOutput { get; set; } = "";
+
+        [DataMember(Name = "cancelled")]
+        public bool Cancelled { get; set; }
+
+        [DataMember(Name = "stderr")]
+        public string StandardError { get; set; } = "";
+    }
+
     internal sealed class CommandResult
     {
         public int ExitCode { get; set; }
         public string StandardOutput { get; set; } = "";
         public string StandardError { get; set; } = "";
+        public bool Cancelled { get; set; }
+        public bool DispatchFailed { get; set; }
+        public bool StartupTimedOut { get; set; }
+        public bool ExecutionInterrupted { get; set; }
+        public string? PreservedWorkspace { get; set; }
+        public string? ExecutionSessionId { get; set; }
 
-        public string DisplayText => $"Exit code: {ExitCode}\r\n{StandardOutput}{StandardError}";
+
+        public bool Succeeded => ExitCode == 0;
+
+        public string DisplayText
+        {
+            get
+            {
+                var text = new StringBuilder();
+                AppendOutput(text, StandardOutput);
+                AppendOutput(text, StandardError);
+                text.Append("[rhinocode exit code: ").Append(ExitCode).Append(']');
+                return text.ToString();
+            }
+        }
+
+        private static void AppendOutput(StringBuilder target, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            target.Append(value);
+            if (!value.EndsWith("\n", StringComparison.Ordinal)) target.AppendLine();
+        }
     }
 
     /// <summary>
@@ -51,7 +101,10 @@ namespace RhinoVSBridge
     /// </summary>
     internal sealed class RhinoCli
     {
+        private static readonly TimeSpan DefaultScriptStartupTimeout = TimeSpan.FromSeconds(15);
+
         public string Executable { get; set; }
+        public TimeSpan ScriptStartupTimeout { get; set; } = DefaultScriptStartupTimeout;
 
         public RhinoCli(string? executable = null)
         {
@@ -71,7 +124,12 @@ namespace RhinoVSBridge
             if (response.ExitCode != 0)
                 throw new InvalidOperationException("rhinocode list failed: " + response.DisplayText);
 
-            var json = response.StandardOutput.Trim();
+            return ParseInstances(response.StandardOutput);
+        }
+
+        internal static IReadOnlyList<RhinoInstance> ParseInstances(string output)
+        {
+            var json = (output ?? string.Empty).Trim();
             // Some CLI versions emit a status prefix before JSON.
             var start = json.IndexOf('[');
             var end = json.LastIndexOf(']');
@@ -81,13 +139,29 @@ namespace RhinoVSBridge
             using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json)))
             {
                 var serializer = new DataContractJsonSerializer(typeof(List<RhinoInstance>));
-                var objects = (List<RhinoInstance>?)serializer.ReadObject(stream);
-                return (objects ?? new List<RhinoInstance>())
-                    .Where(x => !string.IsNullOrEmpty(x.PipeId)).ToList();
+                try
+                {
+                    var objects = (List<RhinoInstance>?)serializer.ReadObject(stream);
+                    return (objects ?? new List<RhinoInstance>())
+                        .Where(x => !string.IsNullOrWhiteSpace(x.PipeId)).ToList();
+                }
+                catch (SerializationException ex)
+                {
+                    throw new InvalidOperationException("Unexpected JSON schema from rhinocode list.", ex);
+                }
             }
         }
 
         public Task<CommandResult> RunScriptAsync(string fullPath, string pipeId)
+        {
+            return RunScriptAsync(fullPath, pipeId, null, CancellationToken.None);
+        }
+
+        public async Task<CommandResult> RunScriptAsync(
+            string fullPath,
+            string pipeId,
+            Func<ScriptOutputEvent, Task>? onOutput,
+            CancellationToken cancellationRequest)
         {
             if (!File.Exists(fullPath))
                 throw new FileNotFoundException("Save the script before running it in Rhino.", fullPath);
@@ -97,8 +171,18 @@ namespace RhinoVSBridge
             if (string.IsNullOrWhiteSpace(pipeId))
                 throw new ArgumentException("Choose a running Rhino instance.", nameof(pipeId));
 
-            return ExecuteAsync("--rhino " + QuoteWindowsArgument(pipeId) + " script " + QuoteWindowsArgument(fullPath),
-                System.Threading.Timeout.Infinite);
+            if (string.Equals(Path.GetExtension(fullPath), ".py2", StringComparison.OrdinalIgnoreCase))
+                return await ExecuteAsync(BuildRunArguments(fullPath, pipeId), Timeout.Infinite).ConfigureAwait(false);
+
+            return await RhinoExecutionRunner.RunAsync(this, fullPath, pipeId, onOutput, cancellationRequest,
+                    ScriptStartupTimeout)
+                .ConfigureAwait(false);
+        }
+
+        internal static string BuildRunArguments(string fullPath, string pipeId)
+        {
+            return "--rhino " + QuoteWindowsArgument(pipeId) +
+                " script " + QuoteWindowsArgument(fullPath);
         }
 
         /// <summary>Windows CommandLineToArgvW-compatible quoting (handles paths with spaces and trailing backslashes).</summary>
@@ -130,7 +214,7 @@ namespace RhinoVSBridge
             return result.ToString();
         }
 
-        private async Task<CommandResult> ExecuteAsync(string arguments, int timeoutMs)
+        internal async Task<CommandResult> ExecuteAsync(string arguments, int timeoutMs)
         {
             var startInfo = new ProcessStartInfo
             {
@@ -145,8 +229,16 @@ namespace RhinoVSBridge
             };
             using (var process = new Process { StartInfo = startInfo })
             {
-                if (!process.Start())
-                    throw new InvalidOperationException("Could not start rhinocode.exe.");
+                try
+                {
+                    if (!process.Start())
+                        throw new InvalidOperationException("Could not start rhinocode.exe.");
+                }
+                catch (Win32Exception ex)
+                {
+                    throw new InvalidOperationException(
+                        "Could not start rhinocode.exe. Use 'Rhino: Choose rhinocode.exe' to select the Rhino 8 CLI.", ex);
+                }
                 // Drain both pipes concurrently. Otherwise output-heavy scripts can deadlock.
                 var stdout = process.StandardOutput.ReadToEndAsync();
                 var stderr = process.StandardError.ReadToEndAsync();
@@ -154,7 +246,10 @@ namespace RhinoVSBridge
                 if (!exited)
                 {
                     try { process.Kill(); } catch (InvalidOperationException) { }
-                    throw new TimeoutException("rhinocode did not respond. Check StartScriptServer in Rhino.");
+                    await Task.Run(() => process.WaitForExit()).ConfigureAwait(false);
+                    throw new TimeoutException(timeoutMs == 15000
+                        ? "rhinocode list did not respond within 15 seconds. Check the Rhino ScriptServer connection."
+                        : "rhinocode did not respond within the configured timeout. Rhino may be busy or its ScriptServer connection was interrupted.");
                 }
                 var output = await stdout.ConfigureAwait(false);
                 var error = await stderr.ConfigureAwait(false);

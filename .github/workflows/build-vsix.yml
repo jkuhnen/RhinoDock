@@ -1,0 +1,48 @@
+name: Build VSIX
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Visual Studio 2026
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore and build VSIX
+        run: dotnet build RhinoVSBridge.sln --configuration Release
+
+      - name: Run product C# tests
+        run: dotnet run --project tests/RhinoVSBridge.CoreTests/RhinoVSBridge.CoreTests.csproj --configuration Release --no-build
+
+      - name: Run portable contract tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Publish VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RhinoVSBridge-v0.3.2-${{ github.sha }}
+          path: src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix
+          if-no-files-found: error

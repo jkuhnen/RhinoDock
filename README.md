@@ -2,7 +2,7 @@
 
 Standalone **clean-room** prototype of a VSIX extension for writing Rhino 8 CPython scripts in **Visual Studio** (NOT VS Code), using Visual Studio's Python Tools for editing and IntelliSense. It runs saved scripts in an existing Rhino 8 instance by calling McNeel's official `rhinocode` CLI. Original inspiration: Jingcheng Chen's RhinoPythonForVS. None of that repository's source code was copied (its license has not been confirmed).
 
-> **Important:** This is a development preview, not a finished release. The VSIX now builds and loads on the Windows test machine with Visual Studio 2026 and Rhino 8, but Rhino type-stub IntelliSense and several edge cases still need work. Generated `.vsix` files are build artifacts and are intentionally not committed.
+> **Important:** This is a development preview, not a finished release. The VSIX builds and loads on the Windows test machine with Visual Studio 2026 and Rhino 8. Full Rhino IntelliSense and the save → Shift+F2 → execute-in-Rhino workflow are verified; the remaining limitations are documented below. Generated `.vsix` files are build artifacts and are intentionally not committed.
 
 ## Architecture
 
@@ -15,11 +15,12 @@ Visual Studio 2026 (PTVS Python editor)
               |  rhinocode list --json
               |  select Rhino instance (pipeId)
               v
-          rhinocode --rhino <id> script <absolute-file>
+          rhinocode --rhino <id> script <managed-execution-runner>
               |
               v
          Rhino 8 (StartScriptServer enabled)
               | CPython 3 for .py, IronPython for .py2
+              +--> original .py, stdout/stderr, traceback and result
               +--> model, command history, Rhino runtime
 ```
 
@@ -35,7 +36,7 @@ Visual Studio 2026 (PTVS Python editor)
 - Open `RhinoVSBridge.sln` in Visual Studio 2026.
 - Restore NuGet packages. Build **Debug / Any CPU**. The SDK-style project uses `Microsoft.VisualStudio.SDK` 17.14 and `Microsoft.VSSDK.BuildTools` 18.5; package versions may be updated as needed.
 - Use **F5** to launch the Visual Studio experimental instance, or install the generated `.vsix` after successful compilation.
-- Under **Tools**, find five `Rhino:` menu commands.
+- Under **Tools**, find six `Rhino:` menu commands.
 
 The current verified build output is:
 
@@ -50,17 +51,19 @@ src\RhinoVSBridge\bin\Debug\net48\RhinoVSBridge.vsix
 1. In the Rhino 8 window, execute `StartScriptServer`.
 2. In Visual Studio open `examples/hello_rhino.py` or your own saved `.py` script.
 3. Choose **Tools > Rhino: Diagnose Connection and Stubs** to check RhinoCode and discovered stub paths.
-4. Choose **Tools > Rhino: Configure Project IntelliSense**. The command locates Rhino-generated `.pyi` stubs and Python module paths, safely backs up your existing `.pyproj` as `.rhino-bridge.bak`, and appends Search Paths. **Reload the Python project** afterward (Solution Explorer > Reload Project). If no `.pyproj` is selected, paths are copied to the clipboard instead.
+4. Choose **Tools > Rhino: Configure Project IntelliSense**. The command locates Rhino-generated `.pyi` stubs and CPython module paths, safely backs up the existing `.pyproj`, appends PTVS Search Paths, and creates a project-local `scriptcontext.pyi` shim. **Close and reopen the solution** afterward; VS 18.11 did not reliably update the already running Pylance service after Project Reload alone. If no `.pyproj` is selected, paths are copied to the clipboard instead.
 5. Choose **Tools > Rhino: Run Active Python Script**. Unsaved edits in the active document are saved automatically. Output is shown in **Output > Rhino VS Bridge**. If more than one Rhino instance is found, choose the target.
-6. Configure an editor shortcut for the `Rhino: Run Active Python Script` command under **Tools > Options > Environment > Keyboard** (command registration/name should be verified in experimental VS).
+6. Press **Shift+F2** in the text editor to save and run the active script. The default command binding is `Tools.RhinoRunActivePythonScript` in the **Text Editor** scope. If an existing extension or personal setting already owns Shift+F2, reassign that command under **Tools > Options > Environment > Keyboard**.
+7. For a running CPython script, choose **Tools > Rhino: Cancel Running Script**. Cancellation is cooperative and is acknowledged only after execution inside Rhino reaches a Python trace point.
 
 ### IntelliSense reality check
 
 - The `.pyi` stubs for the RhinoCommon/.NET assemblies normally appear under `~/.rhinocode/py39-rh8/site-stubs/rhino3d-<build>` once Rhino's ScriptEditor has been opened.
-- `rhinoscriptsyntax` and `scriptcontext` require the actual Python library source in Rhino's `site-rhinopython` or older settings/lib folders. The extension discovers likely paths rather than downloading unsupported type packages.
-- On the test machine, the extension discovers the current Rhino 8.35 stub tree and writes the expected paths to the Python project. Visual Studio 2026 starts its bundled Pylance server and local-project navigation works, but member completion from the Rhino-generated stubs has **not** been confirmed.
-- `Rhino.Geometry.Point3d` is present in Rhino's generated `.pyi` files and `rhinoscriptsyntax.AddLine` is present in `site-rhinopython`; the remaining problem appears to be PTVS/Pylance search-path or stub interpretation rather than missing Rhino files.
-- This extension configures project search paths; it does **not** install a custom editor or language server, copy stubs into the project, or modify Rhino's Python installation.
+- PTVS passes `.pyproj` Search Paths to Pylance as `python.analysis.extraPaths`. Tools > Options > Python > Analysis > **Search paths** is an additional global `extraPaths` list; **Stubs path** is one global `stubPath` and is not appropriate for Rhino's mixed versioned-stub and Python-source roots.
+- The bridge adds only the versioned root that directly contains `Rhino`, plus `site-rhinopython` and `site-interop`. It no longer adds the non-importable `site-stubs` parent or legacy IronPython `settings\lib`.
+- Pylance resolves `rhinoscriptsyntax` from Rhino's source. Because `scriptcontext.py` replaces itself dynamically in `sys.modules`, the bridge creates a small project-local typing shim for its public members.
+- Actual VS 2026 checks confirmed completion for `Rhino.Geometry.Point3d`, `Point3d.Origin`, `rhinoscriptsyntax.AddLine`, `scriptcontext.doc`, and a local module; Point3d signature help, QuickInfo documentation, and Go to Definition into Rhino's generated `.pyi` also worked.
+- This extension does **not** install a custom editor or language server, or modify Rhino's Python installation. See [the VS 2026 investigation](docs/intellisense-vs2026.md) for the exact path handoff and genuinely observed features.
 - Do not use Visual Studio's ordinary Python Run/Debug command for Rhino scripts. The selected interpreter is for editing and static analysis only; execute scripts through **Tools > Rhino: Run Active Python Script** so they run inside Rhino.
 
 ## Simple CLI test without any VSIX
@@ -78,35 +81,57 @@ Run portable tests:
 
 ```powershell
 python -m unittest discover -s tests -v
+dotnet run --project tests\RhinoVSBridge.CoreTests
+python tools\probe_intellisense.py
 ```
 
-## Verified status (2026-10-15)
+## Verified status (2026-11-03)
 
 ### Automated checks
 
 - NuGet restore and `Debug | Any CPU` rebuild with Visual Studio Community 2026 18.11: **passed**, 0 warnings and 0 errors.
 - Command-line build with Visual Studio 2022: **passed**. Loading the VSIX in Visual Studio 2022 is not yet verified.
 - VSIX packaging: **passed**. The package contains `extension.vsixmanifest`, `RhinoVSBridge.dll`, and `RhinoVSBridge.pkgdef`; the compiled command table is embedded in the package assembly.
-- Unit tests: **8/8 passed** with `python -m unittest discover -s tests -v`.
+- Portable Python tests: **15/15 passed** with `python -m unittest discover -s tests -v`.
+- Product C# tests: **27/27 passed**. They link the actual execution, target-selection, workspace, coordination, and IntelliSense path-management sources.
+- Release CI: **configured** on GitHub's Visual Studio 2026 Windows image and uploads the Release VSIX as a workflow artifact.
+- Default shortcut contract: Visual Studio exposed `Tools.RhinoRunActivePythonScript` as `Text Editor::Shift+F2`.
+- Rhino execution integration: the product C# implementation captured Unicode output and an intentional traceback with the original file and line number.
+- IntelliSense path reconciliation removes obsolete bridge-managed Rhino version paths while preserving custom project paths.
 - Official RhinoCode discovery: `rhinocode list --json` found the running Rhino 8.35 instance and its script-server pipe.
 - `examples/hello_rhino.py` executed through the official RhinoCode CLI in Rhino CPython 3, and the integration verifier confirmed exactly one point was added.
 - CLI quoting with a script path containing spaces is covered by an automated test and passed.
+- IntelliSense import-layout probe: **passed** for Rhino, Rhino.Geometry, Point3d/Origin, rhinoscriptsyntax/AddLine, scriptcontext shim, and the local module.
 
-### Actual GUI checks
+### Actual GUI checks (through v0.3.2)
 
 - The VSIX loaded in a Visual Studio 2026 experimental instance.
 - All five `Rhino:` commands were present under **Tools**.
 - The package initialized successfully when its commands were invoked.
-- The IntelliSense test project opened and Visual Studio's bundled Pylance 2026.3.1 started.
+- **Configure Project IntelliSense** discovered and added exactly three Rhino CPython roots and generated the `scriptcontext` shim after confirmation.
+- The IntelliSense test project opened and Visual Studio's bundled Pylance 2026.3.1 (Pyright 1.1.411) started.
+- After restarting the experimental instance and reopening the configured solution, member completion worked for Rhino, Rhino.Geometry, Point3d/Origin, rhinoscriptsyntax/AddLine, scriptcontext/doc, and a local module.
+- Point3d parameter signatures, QuickInfo documentation, and Go to Definition into the generated `Rhino\Geometry\__init__.pyi` were observed in the real editor.
+- **Shift+F2** invoked the extension from a Python editor. An unsaved token was absent from disk before the keypress, saved by the command, and observed in the geometry created in Rhino.
+- Successful `print` output, the exact Rhino PID/pipe, exit code, and completion marker appeared in the Rhino VS Bridge Output pane.
+- An intentional Python exception showed its Unicode output, traceback, original script path and line 4, and exit code 1 in Visual Studio.
+- A script path containing both spaces and Unicode characters executed successfully.
+- With two Rhino instances, explicit selection changed only the selected instance. Closing that instance caused the next run to fail safely without falling back to the other Rhino process.
+- The unavailable-selected-instance message was observed in the real GUI and explicitly stated that no script was sent.
+- The v0.3.0 VSIX was tested with Visual Studio 2026 and Rhino 8.35. Live output, cooperative cancellation, restart after cancellation, Python tracebacks, RhinoCommon geometry creation, and prevention of overlapping executions all passed.
+- The v0.3.1 VSIX was tested with Visual Studio 2026 and Rhino 8.36. Failed `rhinocode.exe` launch recovery, scripts longer than 15 seconds, delayed Rhino-side startup detection, startup-timeout workspace retention, cooperative cancellation before delayed startup, and overlap prevention all passed.
+- The v0.3.2 VSIX was tested with Visual Studio 2026 and Rhino 8.36. After Rhino was blocked for about 60 seconds, the bridge reported the 15-second startup timeout, preserved the uncertain execution lock, rejected overlap with an accurate diagnostic, then accepted the delayed terminal result, released the slot automatically, and permitted a follow-up run without restarting Visual Studio.
+- See [the end-to-end verification report](docs/end-to-end-workflow-vs2026.md) for the fixtures, checks, and limitations.
 
 ### Still to test or fix
 
-- Confirm member completion in Visual Studio for `Rhino.Geometry.Point3d`, `rhinoscriptsyntax.AddLine`, and `scriptcontext`. The generated files exist, but Pylance did not reliably offer their members through the configured `.pyproj` search paths.
-- Re-test the complete **Tools > Rhino: Run Active Python Script** path after the IntelliSense work. Direct execution through the same official RhinoCode protocol is already verified.
-- Verify explicit target selection with two simultaneously running Rhino instances and ensure a script cannot be sent to the wrong instance.
-- Perform the requested real filesystem test under `C:\Users\Test User\Projects\my test.py`; only an equivalent space-containing path and the quoting unit test have been exercised so far.
-- Install and load the generated VSIX in Visual Studio 2022.
-- Add Windows CI that builds and publishes the VSIX artifact.
+- Improve the PTVS/Pylance refresh path: Project Reload displayed the new paths but Pylance 2026.3.1 retained its prior settings. A clean solution restart is currently required.
+- Go to Definition through `rhinoscriptsyntax`'s star re-export was not confirmed; Point3d definition navigation is verified.
+- `.py2` uses direct legacy CLI execution and does not yet return Python output or exception details to Visual Studio.
+- Tracebacks retain the original `.py` path and line but can include one capture-runner frame; clickable traceback navigation is not implemented.
+- CPython cancellation is cooperative; native calls are not forcibly interrupted, and legacy `.py2` cannot be cancelled safely.
+- Install and load the generated VSIX in Visual Studio 2022; its command-line build is already passing.
+- Incomplete execution workspaces are intentionally retained because Rhino may still be using them. Version 0.3.2 automatically reconciles a matching terminal result for 10 minutes and rechecks on Run or Cancel; permanently missing or malformed results remain blocked.
 
 ## Current milestones
 
@@ -115,11 +140,18 @@ python -m unittest discover -s tests -v
 - [x] Added instance picker, output window, and Python stub path discovery with `.pyproj` backup.
 - [x] Added stand-alone RhinoCode connectivity probe and initial XML/CLI tests.
 - [x] Restored and built the VSIX with Visual Studio 2026 on Windows without warnings or errors.
-- [x] Confirmed the VSIX loads and all five commands register in the Visual Studio 2026 experimental instance.
+- [x] Confirmed the v0.2.3 VSIX loads and all five commands from that version register in the Visual Studio 2026 experimental instance.
 - [x] Confirmed official RhinoCode discovery and CPython script execution in an actual running Rhino 8 instance.
-- [ ] Confirm `Rhino.Geometry` and `rhinoscriptsyntax` member IntelliSense in PTVS; improve if necessary.
-- [ ] Add reliable cancellation, keyboard shortcut defaults, traceback navigation, more tests, configuration persistence.
-- [ ] Add Windows CI producing an installable `.vsix` artifact.
+- [x] Confirmed RhinoCommon, rhinoscriptsyntax, scriptcontext, and local-module completion in Visual Studio 2026 Pylance.
+- [x] Verify save-before-run, Shift+F2, Output capture, exception reporting, Unicode paths, and deterministic multi-instance execution.
+- [x] Add no-timeout execution, cooperative cancellation, live output transport, safe workspace retention, and same-instance overlap prevention.
+- [x] Verify the v0.3 streaming, cancellation, restart, traceback, RhinoCommon, and overlap-prevention workflow in Visual Studio 2026 with Rhino 8.35.
+- [x] Add a Rhino-side startup acknowledgment, startup-only timeout, and safe process-launch recovery for v0.3.1.
+- [x] Verify v0.3.1 startup timeout, delayed startup, long-running execution, cancellation, and launch recovery in Visual Studio 2026 with Rhino 8.36.
+- [x] Add identity-validated automatic reconciliation, completion-aware cancellation, and state-specific diagnostics for v0.3.2.
+- [x] Add Windows CI producing an installable `.vsix` artifact.
+- [x] Perform the controlled v0.3.2 late-completion reconciliation GUI checks.
+- [ ] Add clickable traceback navigation.
 
 ## References
 
@@ -132,4 +164,4 @@ python -m unittest discover -s tests -v
 
 ## Notes for Codex
 
-Read `AGENTS.md`. Keep subsequent work on feature branches. The next priority is the reproducible PTVS/Pylance Rhino-stub investigation, followed by the remaining multi-instance, spaced-user-path, Visual Studio 2022 load, and CI checks. Do not add larger features until these integration basics are reliable.
+Read `AGENTS.md`. Keep subsequent work on feature branches. IntelliSense, the Visual Studio 2026 end-to-end run workflow, and v0.3.2 execution reliability are verified through Rhino 8.36, including delayed completion after a startup timeout and automatic slot recovery. Do not add interactive debugging until the basic integration remains stable.
