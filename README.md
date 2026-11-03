@@ -1,8 +1,8 @@
-# Rhino VS Bridge — Visual Studio 2026 / Rhino 8 (development preview)
+# Rhino VS Bridge — Visual Studio 2026 / Rhino 8
 
-Standalone **clean-room** prototype of a VSIX extension for writing Rhino 8 CPython scripts in **Visual Studio** (NOT VS Code), using Visual Studio's Python Tools for editing and IntelliSense. It runs saved scripts in an existing Rhino 8 instance by calling McNeel's official `rhinocode` CLI. Original inspiration: Jingcheng Chen's RhinoPythonForVS. None of that repository's source code was copied (its license has not been confirmed).
+Standalone **clean-room** VSIX extension for writing Rhino 8 CPython scripts in **Visual Studio** (NOT VS Code), using Visual Studio's Python Tools for editing and IntelliSense. It runs saved scripts in an existing Rhino 8 instance by calling McNeel's official `rhinocode` CLI. Original inspiration: Jingcheng Chen's RhinoPythonForVS. None of that repository's source code was copied (its license has not been confirmed).
 
-> **Important:** This is a development preview, not a finished release. The VSIX builds and loads on the Windows test machine with Visual Studio 2026 and Rhino 8. Full Rhino IntelliSense and the save → Shift+F2 → execute-in-Rhino workflow are verified; the remaining limitations are documented below. Generated `.vsix` files are build artifacts and are intentionally not committed.
+> **Release:** Version 0.4.0 is the first stable, installable release. Its execution, cancellation, recovery, IntelliSense, Output-pane reporting, and Error List navigation workflows have passed real-world GUI testing with Visual Studio 2026 and Rhino 8.36. See the [installation and usage guide](docs/installation-v040.md) before installing the VSIX.
 
 ## Architecture
 
@@ -27,7 +27,7 @@ Visual Studio 2026 (PTVS Python editor)
 
 ## Prerequisites on Windows
 
-1. **Visual Studio 2026**, with the **Visual Studio extension development** workload and **Python development** workload. The project uses VS2022-compatible VSSDK APIs where practical. Command-line builds have succeeded with both Visual Studio 2026 and Visual Studio 2022; extension loading has currently been verified only in the Visual Studio 2026 experimental instance.
+1. **Visual Studio 2026** (x64 Community, Professional, or Enterprise) with the **Python development** workload. The **Visual Studio extension development** workload is required only when building the repository, not when installing the packaged VSIX. The project uses VS2022-compatible VSSDK APIs where practical; command-line builds also pass with Visual Studio 2022, but normal use is verified with Visual Studio 2026.
 2. **Rhino 8.11 or newer**, with `rhinocode.exe` in `%ProgramFiles%\Rhino 8\System\`.
 3. Open Rhino and enter the command **`StartScriptServer`**. Open **`ScriptEditor`** once to generate Python type stubs.
 4. For editing and autocomplete, create or open a **Visual Studio Python project** (`.pyproj`) and choose a regular compatible CPython environment for its static analysis. Execution is **always** performed by Rhino, NOT by Visual Studio's selected Python interpreter.
@@ -46,6 +46,9 @@ src\RhinoVSBridge\bin\Debug\net48\RhinoVSBridge.vsix
 ```
 
 `bin` and `obj` directories, generated VSIX packages, IDE state, test caches, and user-specific backup files are excluded from Git.
+
+For ordinary installation rather than development, use the packaged Release
+VSIX and follow the [v0.4.0 installation and usage guide](docs/installation-v040.md).
 
 ### Workflow
 
@@ -109,7 +112,7 @@ python tools\probe_intellisense.py
 ### Actual GUI checks (through v0.4.0)
 
 - The VSIX loaded in a Visual Studio 2026 experimental instance.
-- All five `Rhino:` commands were present under **Tools**.
+- All six `Rhino:` commands were present under **Tools**.
 - The package initialized successfully when its commands were invoked.
 - **Configure Project IntelliSense** discovered and added exactly three Rhino CPython roots and generated the `scriptcontext` shim after confirmation.
 - The IntelliSense test project opened and Visual Studio's bundled Pylance 2026.3.1 (Pyright 1.1.411) started.
@@ -125,6 +128,11 @@ python tools\probe_intellisense.py
 - The v0.3.1 VSIX was tested with Visual Studio 2026 and Rhino 8.36. Failed `rhinocode.exe` launch recovery, scripts longer than 15 seconds, delayed Rhino-side startup detection, startup-timeout workspace retention, cooperative cancellation before delayed startup, and overlap prevention all passed.
 - The v0.3.2 VSIX was tested with Visual Studio 2026 and Rhino 8.36. After Rhino was blocked for about 60 seconds, the bridge reported the 15-second startup timeout, preserved the uncertain execution lock, rejected overlap with an accurate diagnostic, then accepted the delayed terminal result, released the slot automatically, and permitted a follow-up run without restarting Visual Studio.
 - The v0.4.0 VSIX was tested with Visual Studio 2026 and Rhino 8.36. Python runtime exceptions appeared in the native Error List; double-click opened the correct source file and line through nested Python calls and for files outside the current solution. A successful follow-up execution cleared stale Rhino VS Bridge entries while the complete original traceback remained in the Output pane.
+- The final v0.4.0 package installed successfully in a regular, non-experimental
+  Visual Studio 2026 instance with Rhino 8.36. All six commands, connection
+  diagnostics, Shift+F2 execution, RhinoCommon/rhinoscriptsyntax/scriptcontext
+  IntelliSense, and Python Error List navigation passed. After the navigation
+  correction, a traceback reported and navigated to line 7 exactly.
 - See [the end-to-end verification report](docs/end-to-end-workflow-vs2026.md) for the fixtures, checks, and limitations.
 
 ### Still to test or fix
@@ -166,6 +174,8 @@ python tools\probe_intellisense.py
 - VS 2022/2026 compatibility: https://learn.microsoft.com/en-us/visualstudio/extensibility/migration/extension-compatibility
 - Visual Studio PTVS Search Paths: https://learn.microsoft.com/en-us/visualstudio/python/search-paths
 - [v0.4 Python error navigation design and GUI checklist](docs/python-error-navigation-v04.md)
+- [v0.4.0 installation and usage guide](docs/installation-v040.md)
+- [v0.4.0 release notes](docs/releases/v0.4.0.md)
 - Original extension (reference only): https://github.com/jingcheng-chen/RhinoPythonForVS
 
 ## Notes for Codex

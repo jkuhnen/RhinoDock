@@ -18,8 +18,12 @@ frames and pseudo-files such as **<string>** remain visible in the original
 Output-pane traceback but are not offered as user navigation targets.
 
 Python line numbers are one-based. Error List tasks use the Visual Studio SDK's
-zero-based line value, so Python line 7 is stored as line 6. Tracebacks do not
-provide a reliable column; navigation uses column zero.
+zero-based display value, so Python line 7 is stored as line 6 and displayed as
+line 7. The legacy **TaskProvider.Navigate** helper interprets its task line as
+one-based and subtracts one before calling the editor. Navigation therefore uses
+a separate task containing line 7 while leaving the displayed task at line 6.
+This prevents double conversion without changing the correct Error List value.
+Tracebacks do not provide a reliable column; navigation uses column zero.
 
 The final unindented exception line becomes the Error List description, prefixed
 with **Rhino VS Bridge:**. Missing or malformed frames are ignored safely and
@@ -33,9 +37,10 @@ Starting a newly accepted Rhino execution clears only this provider's tasks;
 build, IntelliSense, and other extensions' entries are never modified.
 
 Double-click navigation uses the supported **ErrorListProvider.Navigate** API
-with Visual Studio's code logical view. The task carries the full source path
-and zero-based line. Visual Studio can therefore open a Python file that is
-outside the current solution and position the editor at the reported line.
+with Visual Studio's code logical view. A separate navigation task carries the
+unchanged full source path and the one-based line expected by that helper.
+Visual Studio can therefore open a Python file that is outside the current
+solution and position the editor at the reported line.
 
 Error List publication is deliberately non-fatal. If the IDE rejects a task or
 navigation metadata, execution cleanup continues and a diagnostic is written to
@@ -72,6 +77,7 @@ The v0.4 tests cover:
 
 - spaces, Unicode, punctuation, and special characters in Windows paths;
 - one-based Python to zero-based Visual Studio line conversion;
+- navigation to Python lines 1, 2, 7, and 100 without a second subtraction;
 - multiple frames and innermost-frame selection;
 - exclusion of the generated Rhino runner from user-facing locations;
 - chained exceptions;

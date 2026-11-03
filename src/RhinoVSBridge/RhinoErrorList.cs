@@ -62,7 +62,19 @@ namespace RhinoVSBridge
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             if (sender is ErrorTask task)
-                _provider.Navigate(task, VSConstants.LOGVIEWID_Code);
+            {
+                // Error List tasks use a zero-based Line for display, but
+                // TaskProvider.Navigate subtracts one from positive line values.
+                // Navigate with a separate one-based task so the displayed task
+                // remains unchanged and both surfaces identify the same line.
+                var navigationTask = new ErrorTask
+                {
+                    Document = task.Document,
+                    Line = ErrorListNavigation.ToTaskProviderLine(task.Line),
+                    Column = task.Column
+                };
+                _provider.Navigate(navigationTask, VSConstants.LOGVIEWID_Code);
+            }
         }
 
         public void Dispose()

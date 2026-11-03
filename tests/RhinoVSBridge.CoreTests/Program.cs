@@ -75,6 +75,7 @@ namespace RhinoVSBridge
                 ("Python traceback parsing selects the innermost user frame", TestTracebackFrameSelection),
                 ("Python traceback parsing handles chained exceptions", TestChainedTracebacks),
                 ("Malformed tracebacks are ignored and line conversion is zero-based", TestMalformedTracebacks),
+                ("Error List navigation preserves Python line numbers", TestErrorListNavigationLines),
                 ("Missing RhinoCode executable produces actionable error", TestMissingExecutable),
                 ("Target selection never falls back from a disconnected explicit instance", TestTargetSelection),
                 ("Search path reconciliation removes only obsolete Rhino paths", TestPathReconciliation),
@@ -246,6 +247,18 @@ namespace RhinoVSBridge
             Equal(0, PythonTracebackParser.ToVisualStudioLine(0));
             Equal(0, PythonTracebackParser.ToVisualStudioLine(1));
             Equal(6, PythonTracebackParser.ToVisualStudioLine(7));
+            return Task.CompletedTask;
+        }
+
+        private static Task TestErrorListNavigationLines()
+        {
+            foreach (var pythonLine in new[] { 1, 2, 7, 100 })
+            {
+                var displayedTaskLine = PythonTracebackParser.ToVisualStudioLine(pythonLine);
+                var providerLine = ErrorListNavigation.ToTaskProviderLine(displayedTaskLine);
+                Equal(pythonLine, providerLine);
+            }
+
             return Task.CompletedTask;
         }
 

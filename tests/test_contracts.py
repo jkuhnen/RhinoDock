@@ -93,7 +93,9 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn("_errors?.Clear()", package)
         self.assertIn("new ErrorListProvider(serviceProvider)", provider)
         self.assertIn('ProviderName = "Rhino VS Bridge"', provider)
-        self.assertIn("_provider.Navigate(task, VSConstants.LOGVIEWID_Code)", provider)
+        self.assertIn("_provider.Navigate(navigationTask, VSConstants.LOGVIEWID_Code)", provider)
+        self.assertIn("Document = task.Document", provider)
+        self.assertIn("ToTaskProviderLine(task.Line)", provider)
         self.assertIn('string.Equals(fileName, "bridge_runner.py"', parser)
         self.assertIn("pythonLineNumber - 1", parser)
 
