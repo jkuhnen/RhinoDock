@@ -158,4 +158,6 @@ unsaved work.
   classification assumption for RhinoCode exit semantics.
 - Cancellation remains cooperative; blocking native calls can delay it, and
   `.py2` has no runner-based acknowledgment or reconciliation protocol.
-- Tracebacks remain Output-pane text rather than clickable Error List entries.
+- The complete traceback remains plain text in the Output pane. Since v0.4,
+  user frames are also published as navigable Rhino VS Bridge Error List
+  entries; the Output-pane text itself is intentionally not clickable.
