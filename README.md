@@ -106,7 +106,7 @@ python tools\probe_intellisense.py
 - IntelliSense import-layout probe: **passed** for Rhino, Rhino.Geometry, Point3d/Origin, rhinoscriptsyntax/AddLine, scriptcontext shim, and the local module.
 - Version 0.4 parses Python traceback frames and publishes package-owned Visual Studio Error List tasks with zero-based navigation coordinates.
 
-### Actual GUI checks (through v0.3.2)
+### Actual GUI checks (through v0.4.0)
 
 - The VSIX loaded in a Visual Studio 2026 experimental instance.
 - All five `Rhino:` commands were present under **Tools**.
@@ -124,6 +124,7 @@ python tools\probe_intellisense.py
 - The v0.3.0 VSIX was tested with Visual Studio 2026 and Rhino 8.35. Live output, cooperative cancellation, restart after cancellation, Python tracebacks, RhinoCommon geometry creation, and prevention of overlapping executions all passed.
 - The v0.3.1 VSIX was tested with Visual Studio 2026 and Rhino 8.36. Failed `rhinocode.exe` launch recovery, scripts longer than 15 seconds, delayed Rhino-side startup detection, startup-timeout workspace retention, cooperative cancellation before delayed startup, and overlap prevention all passed.
 - The v0.3.2 VSIX was tested with Visual Studio 2026 and Rhino 8.36. After Rhino was blocked for about 60 seconds, the bridge reported the 15-second startup timeout, preserved the uncertain execution lock, rejected overlap with an accurate diagnostic, then accepted the delayed terminal result, released the slot automatically, and permitted a follow-up run without restarting Visual Studio.
+- The v0.4.0 VSIX was tested with Visual Studio 2026 and Rhino 8.36. Python runtime exceptions appeared in the native Error List; double-click opened the correct source file and line through nested Python calls and for files outside the current solution. A successful follow-up execution cleared stale Rhino VS Bridge entries while the complete original traceback remained in the Output pane.
 - See [the end-to-end verification report](docs/end-to-end-workflow-vs2026.md) for the fixtures, checks, and limitations.
 
 ### Still to test or fix
@@ -131,7 +132,7 @@ python tools\probe_intellisense.py
 - Improve the PTVS/Pylance refresh path: Project Reload displayed the new paths but Pylance 2026.3.1 retained its prior settings. A clean solution restart is currently required.
 - Go to Definition through `rhinoscriptsyntax`'s star re-export was not confirmed; Point3d definition navigation is verified.
 - `.py2` uses direct legacy CLI execution and does not yet return Python output or exception details to Visual Studio.
-- Validate v0.4 Error List double-click navigation in the real Visual Studio 2026 GUI, including an external file with a Unicode/special-character path.
+- Validate Error List navigation with a Unicode/special-character path in the real Visual Studio GUI; external-file navigation itself is verified.
 - CPython cancellation is cooperative; native calls are not forcibly interrupted, and legacy `.py2` cannot be cancelled safely.
 - Install and load the generated VSIX in Visual Studio 2022; its command-line build is already passing.
 - Incomplete execution workspaces are intentionally retained because Rhino may still be using them. Version 0.3.2 automatically reconciles a matching terminal result for 10 minutes and rechecks on Run or Cancel; permanently missing or malformed results remain blocked.
@@ -155,7 +156,7 @@ python tools\probe_intellisense.py
 - [x] Add Windows CI producing an installable `.vsix` artifact.
 - [x] Perform the controlled v0.3.2 late-completion reconciliation GUI checks.
 - [x] Add package-owned Error List integration and Python traceback navigation for v0.4.
-- [ ] Perform the controlled v0.4 Error List and external-file navigation GUI checks.
+- [x] Perform the controlled v0.4 Error List and external-file navigation GUI checks.
 
 ## References
 
@@ -169,4 +170,4 @@ python tools\probe_intellisense.py
 
 ## Notes for Codex
 
-Read `AGENTS.md`. Keep subsequent work on feature branches. IntelliSense, the Visual Studio 2026 end-to-end run workflow, and v0.3.2 execution reliability are verified through Rhino 8.36, including delayed completion after a startup timeout and automatic slot recovery. Version 0.4 Error List navigation is automated-test complete but still needs its controlled Visual Studio GUI pass. Do not add interactive debugging until the basic integration remains stable.
+Read `AGENTS.md`. Keep subsequent work on feature branches. IntelliSense, the Visual Studio 2026 end-to-end run workflow, v0.3.2 execution reliability, and v0.4.0 Error List navigation are verified through Rhino 8.36. This includes delayed completion recovery, nested Python calls, external-file navigation, stale-entry clearing, and preservation of the original Output-pane traceback. Do not add interactive debugging until the basic integration remains stable.

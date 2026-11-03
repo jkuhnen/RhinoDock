@@ -82,9 +82,24 @@ The v0.4 tests cover:
 All v0.3.2 execution, recovery, cancellation, selection, quoting, workspace, and
 IntelliSense tests remain present.
 
-## Manual GUI verification
+## Actual GUI verification
 
-Use Visual Studio 2026 and a disposable Rhino 8.36 or newer test instance:
+The v0.4.0 VSIX passed real-world testing with Visual Studio 2026 and Rhino
+8.36:
+
+- Python runtime exceptions appeared in the native Visual Studio Error List.
+- Double-click opened the correct Python file and selected the reported line.
+- Nested Python function calls produced navigable frames at the correct source
+  locations.
+- A Python file outside the current solution opened and navigated correctly.
+- A successful subsequent execution removed stale Rhino VS Bridge entries.
+- The complete original traceback remained available in the Rhino VS Bridge
+  Output pane.
+
+## Manual GUI regression checklist
+
+Repeat the following with Visual Studio 2026 and a disposable Rhino 8.36 or
+newer test instance after future traceback or SDK changes:
 
 1. Install the v0.4 VSIX, start Rhino's **StartScriptServer**, and run a normal
    script. Confirm execution, live output, cancellation, and a follow-up run
@@ -108,9 +123,9 @@ Use Visual Studio 2026 and a disposable Rhino 8.36 or newer test instance:
 
 ## Remaining limitations and risks
 
-- The Error List integration must still be exercised in the real Visual Studio
-  2026 GUI; automated tests validate parsing and SDK wiring but cannot simulate
-  the IDE's double-click interaction.
+- Navigation with spaces, Unicode, and punctuation is covered by automated
+  parser tests, but the full Unicode/special-character path case has not yet
+  been repeated in the Visual Studio GUI.
 - Parsing targets conventional CPython traceback formatting. Custom exception
   formatters or arbitrary stderr without frame lines remain Output-only.
 - Tracebacks provide line numbers but not precise source columns, so navigation
