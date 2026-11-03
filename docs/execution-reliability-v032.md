@@ -92,9 +92,26 @@ races, same-pipe safety locking, and isolation between two Rhino pipe IDs. All
 v0.3.1 launch, timeout, streaming, cancellation, quoting, workspace, selection,
 and IntelliSense tests remain present.
 
-## Manual GUI verification
+## Actual GUI verification
 
-Use Visual Studio 2026 and a disposable Rhino 8.36 test instance:
+The v0.3.2 VSIX passed real-world testing with Visual Studio 2026 and Rhino
+8.36. Normal Python execution, RhinoCommon access, live stdout/stderr,
+cooperative cancellation, failed-process-launch recovery, and scripts running
+longer than 15 seconds remained operational.
+
+For the delayed-completion case, Rhino was deliberately blocked for about 60
+seconds. The bridge reported the 15-second startup timeout, retained the exact
+execution slot as uncertain, and rejected a second run without misreporting it
+as an actively running script. When Rhino resumed, the delayed runner completed
+and atomically published its identity-bearing terminal result. Visual Studio
+reported the late completion, released the slot automatically, and accepted a
+follow-up run without restarting the IDE. This verifies the recovery path that
+remained intentionally conservative in v0.3.1.
+
+## Manual GUI regression checklist
+
+Repeat the following with Visual Studio 2026 and a disposable Rhino 8.36 test
+instance for future execution-protocol changes:
 
 1. Install the v0.3.2 VSIX, run `StartScriptServer`, and confirm a normal script,
    live output, cancellation, and a follow-up run still work.
