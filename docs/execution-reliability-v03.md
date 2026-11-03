@@ -1,5 +1,9 @@
 # Execution reliability for v0.3
 
+This document records the v0.3.0 design. Version 0.3.1 adds a Rhino-side
+startup acknowledgment and safe launch-failure recovery; see
+[the v0.3.1 reliability report](execution-reliability-v031.md).
+
 This milestone keeps Python execution inside Rhino 8 through McNeel's official
 `rhinocode.exe`. It does not add interactive debugging, load RhinoCommon into
 Visual Studio, or alter Rhino's Python installation.

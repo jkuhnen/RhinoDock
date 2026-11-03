@@ -50,7 +50,22 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn("sys.path.insert(0, script_directory)", code)
         self.assertIn("Convert.ToBase64String", code)
         self.assertIn("sys.settrace(cancellation_trace)", code)
+        self.assertIn("os.replace(temporary_startup, startup_path)", code)
+        self.assertIn("StartupTimedOut = true", code)
         self.assertIn("os.replace(temporary_result, result_path)", code)
+
+    def test_startup_timeout_is_separate_and_dispatch_failures_release_state(self):
+        cli = (ROOT / "src/RhinoVSBridge/RhinoCli.cs").read_text()
+        package = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
+        runner = (ROOT / "src/RhinoVSBridge/RhinoExecutionRunner.cs").read_text()
+
+        self.assertIn("ScriptStartupTimeout", cli)
+        self.assertIn("TimeSpan.FromSeconds(15)", cli)
+        self.assertIn("DispatchFailed", runner)
+        self.assertIn("safeToRetry", runner)
+        self.assertIn("if (result.DispatchFailed)", package)
+        self.assertIn("executionFinalized = true", package)
+        self.assertIn("if (result.StartupTimedOut)", package)
 
     def test_package_requests_the_compiled_command_table_resource(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"

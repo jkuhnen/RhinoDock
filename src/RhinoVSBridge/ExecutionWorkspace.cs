@@ -11,6 +11,7 @@ namespace RhinoVSBridge
         public string SessionId { get; }
         public string DirectoryPath { get; }
         public string RunnerPath => Path.Combine(DirectoryPath, "bridge_runner.py");
+        public string StartupPath => Path.Combine(DirectoryPath, "started.json");
         public string ResultPath => Path.Combine(DirectoryPath, "result.json");
         public string EventsPath => Path.Combine(DirectoryPath, "output.jsonl");
         public string CancellationPath => Path.Combine(DirectoryPath, "cancel.requested");

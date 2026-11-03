@@ -22,7 +22,7 @@ namespace RhinoVSBridge
                 return 0;
             }
             if (args.Length > 0 && args[0] == "--rhino")
-                return 42;
+                return await RunFakeRhinoTransportAsync(args);
 
             if (args.Length == 3 && args[0] == "--rhino-cancel")
             {
@@ -77,6 +77,11 @@ namespace RhinoVSBridge
                 ("Python project update creates backup and preserves custom paths", TestProjectUpdate),
                 ("Script execution supports an infinite transport wait", TestLongRunningTransport),
                 ("CPython runner preserves source paths and supports streaming cancellation", TestRunnerContract),
+                ("Runner startup acknowledgment completes successfully", TestSuccessfulStartup),
+                ("Delayed startup acknowledgment does not limit script duration", TestDelayedStartup),
+                ("Startup timeout preserves uncertain execution state", TestStartupTimeout),
+                ("Failed process launch cleans up and permits recovery", TestFailedProcessLaunchRecovery),
+                ("Immediate process failure cleans up and permits recovery", TestImmediateProcessFailureRecovery),
                 ("Execution coordinator prevents overlap per Rhino instance", TestExecutionCoordinator),
                 ("Workspace cleanup removes only completed old executions", TestWorkspaceCleanup),
                 ("Interrupted transports preserve execution files", TestInterruptedTransport)
@@ -258,6 +263,7 @@ namespace RhinoVSBridge
                 Contains("sys.settrace(cancellation_trace)", runner);
                 Contains("os.path.exists(cancel_path)", runner);
                 Contains("events_file.flush()", runner);
+                Contains("os.replace(temporary_startup, startup_path)", runner);
                 Contains("os.fsync(result_file.fileno())", runner);
                 Contains("os.replace(temporary_result, result_path)", runner);
                 True(!runner.Contains(@"C:\Test User\Grüße 世界\source.py"),
@@ -270,6 +276,152 @@ namespace RhinoVSBridge
                 if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
             }
             return Task.CompletedTask;
+        }
+
+        private static async Task TestSuccessfulStartup()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-start-success-" + Guid.NewGuid());
+            var script = CreateScriptFixture(root);
+            try
+            {
+                var executable = Environment.ProcessPath ?? throw new Exception("Test executable path unavailable.");
+                var result = await RhinoExecutionRunner.RunAsync(new RhinoCli(executable), script,
+                    "test-start-success", null, CancellationToken.None, TimeSpan.FromSeconds(2), root);
+
+                True(result.Succeeded, result.DisplayText);
+                True(!result.DispatchFailed && !result.ExecutionInterrupted,
+                    "Successful startup was classified as interrupted.");
+                Equal(0, Directory.GetDirectories(root).Length);
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        private static async Task TestDelayedStartup()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-delayed-start-" + Guid.NewGuid());
+            var script = CreateScriptFixture(root);
+            try
+            {
+                var executable = Environment.ProcessPath ?? throw new Exception("Test executable path unavailable.");
+                var stopwatch = Stopwatch.StartNew();
+                var result = await RhinoExecutionRunner.RunAsync(new RhinoCli(executable), script,
+                    "test-delayed-start", null, CancellationToken.None, TimeSpan.FromMilliseconds(700), root);
+
+                True(result.Succeeded, result.DisplayText);
+                True(stopwatch.ElapsedMilliseconds >= 1000,
+                    "The fake script did not run beyond the startup timeout.");
+                True(!result.StartupTimedOut,
+                    "Execution duration was incorrectly treated as a startup timeout.");
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        private static async Task TestStartupTimeout()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-start-timeout-" + Guid.NewGuid());
+            var script = CreateScriptFixture(root);
+            string? preserved = null;
+            try
+            {
+                var executable = Environment.ProcessPath ?? throw new Exception("Test executable path unavailable.");
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    True(coordinator.TryStart("test-never-start", script, true, out var execution) && execution != null,
+                        "Initial execution slot was not acquired.");
+                    var result = await RhinoExecutionRunner.RunAsync(new RhinoCli(executable), script,
+                        "test-never-start", null, execution!.Cancellation.Token,
+                        TimeSpan.FromMilliseconds(300), root);
+
+                    True(result.StartupTimedOut && result.ExecutionInterrupted,
+                        "Missing startup acknowledgment was not classified as uncertain.");
+                    Contains("did not acknowledge starting", result.StandardError);
+                    preserved = result.PreservedWorkspace;
+                    True(!string.IsNullOrWhiteSpace(preserved) && Directory.Exists(preserved),
+                        "Startup-timeout workspace was not preserved.");
+                    execution.MarkUncertain(preserved);
+                    True(!coordinator.TryStart("test-never-start", "overlap.py", true, out _),
+                        "An uncertain startup released its Rhino execution slot.");
+                    True(coordinator.RequestCancellation("test-never-start", out var cancelled) &&
+                        ReferenceEquals(execution, cancelled),
+                        "Cancellation was not routed to the uncertain execution.");
+                    True(File.Exists(Path.Combine(preserved!, "cancel.requested")),
+                        "Cancellation sentinel was not written for the uncertain execution.");
+                    coordinator.Complete(execution);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        private static async Task TestFailedProcessLaunchRecovery()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-launch-failure-" + Guid.NewGuid());
+            var script = CreateScriptFixture(root);
+            try
+            {
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    True(coordinator.TryStart("test-launch-failure", script, true, out var failed) && failed != null,
+                        "Initial execution slot was not acquired.");
+                    var missing = Path.Combine(root, Guid.NewGuid() + ".exe");
+                    var result = await RhinoExecutionRunner.RunAsync(new RhinoCli(missing), script,
+                        "test-launch-failure", null, failed!.Cancellation.Token,
+                        TimeSpan.FromSeconds(1), root);
+
+                    True(result.DispatchFailed && !result.ExecutionInterrupted,
+                        "A failed process launch was not classified as safe to retry.");
+                    Contains("Could not start rhinocode.exe", result.StandardError);
+                    Equal(0, Directory.GetDirectories(root).Length);
+                    coordinator.Complete(failed);
+                    True(coordinator.TryStart("test-launch-failure", script, true, out var retry) && retry != null,
+                        "Execution slot remained blocked after a failed process launch.");
+                    coordinator.Complete(retry!);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        private static async Task TestImmediateProcessFailureRecovery()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RhinoVSBridge-immediate-failure-" + Guid.NewGuid());
+            var script = CreateScriptFixture(root);
+            try
+            {
+                var executable = Environment.ProcessPath ?? throw new Exception("Test executable path unavailable.");
+                using (var coordinator = new RhinoExecutionCoordinator())
+                {
+                    True(coordinator.TryStart("test-immediate-failure", script, true, out var failed) && failed != null,
+                        "Initial execution slot was not acquired.");
+                    var result = await RhinoExecutionRunner.RunAsync(new RhinoCli(executable), script,
+                        "test-immediate-failure", null, failed!.Cancellation.Token,
+                        TimeSpan.FromSeconds(2), root);
+
+                    True(result.DispatchFailed && !result.ExecutionInterrupted,
+                        "Immediate transport failure was not classified as safe to retry.");
+                    Equal(23, result.ExitCode);
+                    Contains("synthetic immediate startup failure", result.StandardError);
+                    Equal(0, Directory.GetDirectories(root).Length);
+                    coordinator.Complete(failed);
+                    True(coordinator.TryStart("test-immediate-failure", script, true, out var retry) && retry != null,
+                        "Execution slot remained blocked after immediate process failure.");
+                    coordinator.Complete(retry!);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
         }
 
         private static Task TestExecutionCoordinator()
@@ -345,6 +497,56 @@ namespace RhinoVSBridge
                 if (preserved != null && Directory.Exists(preserved)) Directory.Delete(preserved, recursive: true);
                 if (Directory.Exists(scriptFolder)) Directory.Delete(scriptFolder, recursive: true);
             }
+        }
+
+        private static string CreateScriptFixture(string root)
+        {
+            Directory.CreateDirectory(root);
+            var script = Path.Combine(root, "fixture.py");
+            File.WriteAllText(script, "print('fixture')");
+            return script;
+        }
+
+        private static async Task<int> RunFakeRhinoTransportAsync(string[] args)
+        {
+            if (args.Length < 4) return 42;
+            var pipeId = args[1];
+            var workspace = Path.GetDirectoryName(args[3]);
+            if (string.IsNullOrWhiteSpace(workspace)) return 42;
+
+            if (pipeId == "test-immediate-failure")
+            {
+                Console.Error.WriteLine("synthetic immediate startup failure");
+                return 23;
+            }
+            if (pipeId == "pipe-interrupted")
+            {
+                await Task.Delay(1200);
+                Console.Error.WriteLine("synthetic connection interruption");
+                return 42;
+            }
+            if (pipeId == "test-never-start")
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30));
+                return 0;
+            }
+            if (pipeId == "test-delayed-start")
+            {
+                await Task.Delay(300);
+                File.WriteAllText(Path.Combine(workspace, "started.json"), "{\"started\":true}");
+                await Task.Delay(900);
+                File.WriteAllText(Path.Combine(workspace, "result.json"),
+                    "{\"success\":true,\"cancelled\":false,\"stdout\":\"delayed\",\"stderr\":\"\"}");
+                return 0;
+            }
+            if (pipeId == "test-start-success")
+            {
+                File.WriteAllText(Path.Combine(workspace, "started.json"), "{\"started\":true}");
+                File.WriteAllText(Path.Combine(workspace, "result.json"),
+                    "{\"success\":true,\"cancelled\":false,\"stdout\":\"started\",\"stderr\":\"\"}");
+                return 0;
+            }
+            return 42;
         }
 
 

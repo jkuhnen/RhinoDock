@@ -24,6 +24,8 @@ namespace RhinoVSBridge
     internal static class RhinoExecutionRunner
     {
         private const int PollIntervalMs = 100;
+        private const int DefaultStartupTimeoutMs = 15000;
+        private const int ImmediateFailureWindowMs = 1000;
         private const int TransportExitGraceMs = 2000;
         private const int CompletedTransportGraceMs = 5000;
 
@@ -32,11 +34,18 @@ namespace RhinoVSBridge
             string scriptPath,
             string pipeId,
             Func<ScriptOutputEvent, Task>? onOutput,
-            CancellationToken cancellationRequest)
+            CancellationToken cancellationRequest,
+            TimeSpan? startupTimeout = null,
+            string? workspaceRoot = null)
         {
-            var workspace = ExecutionWorkspace.Create(scriptPath, pipeId);
+            var startupLimit = startupTimeout ?? TimeSpan.FromMilliseconds(DefaultStartupTimeoutMs);
+            if (startupLimit <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(startupTimeout), "The startup timeout must be positive.");
+
+            var workspace = ExecutionWorkspace.Create(scriptPath, pipeId, workspaceRoot);
             var resultRead = false;
             var processStarted = false;
+            var safeToRetry = false;
             try
             {
                 File.WriteAllText(workspace.RunnerPath,
@@ -50,26 +59,42 @@ namespace RhinoVSBridge
                         if (!process.Start()) throw new InvalidOperationException("Could not start rhinocode.exe.");
                         processStarted = true;
                     }
-                    catch (Win32Exception ex)
+                    catch (Exception ex)
                     {
-                        throw new InvalidOperationException(
-                            "Could not start rhinocode.exe. Use 'Rhino: Choose rhinocode.exe' to select the Rhino 8 CLI.", ex);
+                        safeToRetry = true;
+                        return DispatchFailure(
+                            "Could not start rhinocode.exe. Use 'Rhino: Choose rhinocode.exe' to select the Rhino 8 CLI. " +
+                            ex.Message);
                     }
 
+                    var launchedUtc = DateTime.UtcNow;
                     var cliStdout = process.StandardOutput.ReadToEndAsync();
                     var cliStderr = process.StandardError.ReadToEndAsync();
                     var output = new OutputEventTail(workspace.EventsPath);
                     DateTime? transportExitedUtc = null;
+                    var startupAcknowledged = false;
                     ScriptCaptureResult? captured = null;
 
                     while (captured == null)
                     {
                         await output.ForwardAvailableAsync(onOutput).ConfigureAwait(false);
+                        if (!startupAcknowledged && File.Exists(workspace.StartupPath))
+                            startupAcknowledged = true;
                         captured = TryReadResult(workspace.ResultPath);
                         if (captured != null) break;
 
                         if (process.HasExited && process.ExitCode != 0)
                         {
+                            if (!startupAcknowledged &&
+                                DateTime.UtcNow - launchedUtc <= TimeSpan.FromMilliseconds(ImmediateFailureWindowMs))
+                            {
+                                var rejectedOut = await cliStdout.ConfigureAwait(false);
+                                var rejectedError = await cliStderr.ConfigureAwait(false);
+                                safeToRetry = true;
+                                return DispatchFailure(
+                                    "rhinocode.exe failed before Rhino acknowledged the script request.",
+                                    process.ExitCode, rejectedOut, rejectedError);
+                            }
                             if (transportExitedUtc == null) transportExitedUtc = DateTime.UtcNow;
                             if (DateTime.UtcNow - transportExitedUtc.Value >= TimeSpan.FromMilliseconds(TransportExitGraceMs))
                             {
@@ -85,6 +110,35 @@ namespace RhinoVSBridge
                                     PreservedWorkspace = workspace.DirectoryPath
                                 };
                             }
+                        }
+                        if (!startupAcknowledged && DateTime.UtcNow - launchedUtc >= startupLimit)
+                        {
+                            if (!process.HasExited)
+                            {
+                                try { process.Kill(); }
+                                catch (InvalidOperationException) { }
+                                catch (Win32Exception) { }
+                            }
+                            if (!process.HasExited)
+                                await Task.Run(() => process.WaitForExit(CompletedTransportGraceMs)).ConfigureAwait(false);
+
+                            var startupOut = process.HasExited
+                                ? await cliStdout.ConfigureAwait(false)
+                                : string.Empty;
+                            var startupError = process.HasExited
+                                ? await cliStderr.ConfigureAwait(false)
+                                : string.Empty;
+                            return new CommandResult
+                            {
+                                ExitCode = process.HasExited ? process.ExitCode : -1,
+                                StandardOutput = startupOut,
+                                StandardError = AppendDiagnostic(startupError,
+                                    "Rhino did not acknowledge starting the Python runner within " +
+                                    startupLimit.TotalSeconds.ToString("0.###") + " seconds."),
+                                StartupTimedOut = true,
+                                ExecutionInterrupted = true,
+                                PreservedWorkspace = workspace.DirectoryPath
+                            };
                         }
                         await Task.Delay(PollIntervalMs).ConfigureAwait(false);
                     }
@@ -109,6 +163,11 @@ namespace RhinoVSBridge
                     };
                 }
             }
+            catch (Exception ex) when (!processStarted)
+            {
+                safeToRetry = true;
+                return DispatchFailure("RhinoCode dispatch failed before a request could reach Rhino. " + ex.Message);
+            }
             catch (Exception ex) when (processStarted && !resultRead)
             {
                 return new CommandResult
@@ -126,7 +185,7 @@ namespace RhinoVSBridge
                 {
                     workspace.TryDeleteCompleted();
                 }
-                else if (!processStarted)
+                else if (!processStarted || safeToRetry)
                 {
                     try { Directory.Delete(workspace.DirectoryPath, recursive: true); }
                     catch (IOException) { }
@@ -135,6 +194,26 @@ namespace RhinoVSBridge
                 // If dispatch might have reached Rhino, never delete an incomplete workspace.
                 // Rhino may still be reading the runner or may write a late result after a connection loss.
             }
+        }
+
+        private static CommandResult DispatchFailure(string diagnostic, int exitCode = -1,
+            string standardOutput = "", string standardError = "")
+        {
+            return new CommandResult
+            {
+                ExitCode = exitCode,
+                StandardOutput = standardOutput,
+                StandardError = AppendDiagnostic(standardError, diagnostic),
+                DispatchFailed = true
+            };
+        }
+
+        private static string AppendDiagnostic(string existing, string diagnostic)
+        {
+            if (string.IsNullOrEmpty(existing)) return diagnostic;
+            return existing.EndsWith("\n", StringComparison.Ordinal)
+                ? existing + diagnostic
+                : existing + Environment.NewLine + diagnostic;
         }
 
         private static Process CreateProcess(string executable, string arguments)
@@ -176,8 +255,15 @@ namespace RhinoVSBridge
             return "import base64, contextlib, io, json, os, sys, threading, tokenize, traceback\n" +
                 $"script_path = base64.b64decode('{Encode(scriptPath)}').decode('utf-8')\n" +
                 $"result_path = base64.b64decode('{Encode(workspace.ResultPath)}').decode('utf-8')\n" +
+                $"startup_path = base64.b64decode('{Encode(workspace.StartupPath)}').decode('utf-8')\n" +
                 $"events_path = base64.b64decode('{Encode(workspace.EventsPath)}').decode('utf-8')\n" +
                 $"cancel_path = base64.b64decode('{Encode(workspace.CancellationPath)}').decode('utf-8')\n" +
+                "temporary_startup = startup_path + '.tmp'\n" +
+                "with open(temporary_startup, 'w', encoding='utf-8') as startup_file:\n" +
+                "    json.dump({'started': True}, startup_file)\n" +
+                "    startup_file.flush()\n" +
+                "    os.fsync(startup_file.fileno())\n" +
+                "os.replace(temporary_startup, startup_path)\n" +
                 "stdout_buffer, stderr_buffer, success, cancelled = io.StringIO(), io.StringIO(), True, False\n" +
                 "events_file, events_lock = open(events_path, 'a', encoding='utf-8', buffering=1), threading.Lock()\n" +
                 "def emit(stream_name, text):\n" +
@@ -213,6 +299,8 @@ namespace RhinoVSBridge
                 "try:\n" +
                 "    with contextlib.redirect_stdout(BridgeStream('stdout', stdout_buffer)), contextlib.redirect_stderr(BridgeStream('stderr', stderr_buffer)):\n" +
                 "        try:\n" +
+                "            if os.path.exists(cancel_path):\n" +
+                "                raise BridgeCancellation('Cancellation requested from Visual Studio')\n" +
                 "            with tokenize.open(script_path) as source_file:\n" +
                 "                code = compile(source_file.read(), script_path, 'exec')\n" +
                 "            scope = {'__name__': '__main__', '__file__': script_path, '__package__': None}\n" +

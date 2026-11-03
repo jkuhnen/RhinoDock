@@ -131,11 +131,24 @@ namespace RhinoVSBridge
                     var result = await _cli.RunScriptAsync(file, pipeId,
                         output => LogAsync(output.Text), execution.Cancellation.Token);
 
+                    if (result.DispatchFailed)
+                    {
+                        executionFinalized = true;
+                        await LogAsync(result.DisplayText + "\r\n");
+                        throw new InvalidOperationException(
+                            "RhinoCode could not dispatch the script. No Rhino-side runner started, so it is safe to try again. " +
+                            "See the Rhino VS Bridge output for details.");
+                    }
                     if (result.ExecutionInterrupted)
                     {
                         await LogAsync(result.DisplayText + "\r\n");
                         execution.MarkUncertain(result.PreservedWorkspace);
                         if (!await IsInstanceAvailableAsync(pipeId)) _pipeId = null;
+                        if (result.StartupTimedOut)
+                            throw new InvalidOperationException(
+                                "Rhino did not acknowledge starting the Python runner before the startup timeout. " +
+                                "The request may still start later, so another script will not be sent to this Rhino instance. " +
+                                "Execution files were preserved at: " + result.PreservedWorkspace);
                         throw new InvalidOperationException(
                             "The RhinoCode transport ended before Rhino returned a final script result. " +
                             "The script may still be running, so its execution files were preserved at: " +

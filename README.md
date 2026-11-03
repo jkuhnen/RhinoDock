@@ -85,15 +85,15 @@ dotnet run --project tests\RhinoVSBridge.CoreTests
 python tools\probe_intellisense.py
 ```
 
-## Verified status (2026-10-15)
+## Verified status (2026-11-03)
 
 ### Automated checks
 
 - NuGet restore and `Debug | Any CPU` rebuild with Visual Studio Community 2026 18.11: **passed**, 0 warnings and 0 errors.
 - Command-line build with Visual Studio 2022: **passed**. Loading the VSIX in Visual Studio 2022 is not yet verified.
 - VSIX packaging: **passed**. The package contains `extension.vsixmanifest`, `RhinoVSBridge.dll`, and `RhinoVSBridge.pkgdef`; the compiled command table is embedded in the package assembly.
-- Portable Python tests: **13/13 passed** with `python -m unittest discover -s tests -v`.
-- Product C# tests: **15/15 passed**. They link the actual execution, target-selection, workspace, coordination, and IntelliSense path-management sources.
+- Portable Python tests: **14/14 passed** with `python -m unittest discover -s tests -v`.
+- Product C# tests: **20/20 passed**. They link the actual execution, target-selection, workspace, coordination, and IntelliSense path-management sources.
 - Release CI: **configured** on GitHub's Visual Studio 2026 Windows image and uploads the Release VSIX as a workflow artifact.
 - Default shortcut contract: Visual Studio exposed `Tools.RhinoRunActivePythonScript` as `Text Editor::Shift+F2`.
 - Rhino execution integration: the product C# implementation captured Unicode output and an intentional traceback with the original file and line number.
@@ -103,7 +103,7 @@ python tools\probe_intellisense.py
 - CLI quoting with a script path containing spaces is covered by an automated test and passed.
 - IntelliSense import-layout probe: **passed** for Rhino, Rhino.Geometry, Point3d/Origin, rhinoscriptsyntax/AddLine, scriptcontext shim, and the local module.
 
-### Actual GUI checks (v0.2.3 baseline)
+### Actual GUI checks (through v0.3.0)
 
 - The VSIX loaded in a Visual Studio 2026 experimental instance.
 - All five `Rhino:` commands were present under **Tools**.
@@ -118,6 +118,7 @@ python tools\probe_intellisense.py
 - A script path containing both spaces and Unicode characters executed successfully.
 - With two Rhino instances, explicit selection changed only the selected instance. Closing that instance caused the next run to fail safely without falling back to the other Rhino process.
 - The unavailable-selected-instance message was observed in the real GUI and explicitly stated that no script was sent.
+- The v0.3.0 VSIX was tested with Visual Studio 2026 and Rhino 8.35. Live output, cooperative cancellation, restart after cancellation, Python tracebacks, RhinoCommon geometry creation, and prevention of overlapping executions all passed.
 - See [the end-to-end verification report](docs/end-to-end-workflow-vs2026.md) for the fixtures, checks, and limitations.
 
 ### Still to test or fix
@@ -127,10 +128,9 @@ python tools\probe_intellisense.py
 - `.py2` uses direct legacy CLI execution and does not yet return Python output or exception details to Visual Studio.
 - Tracebacks retain the original `.py` path and line but can include one capture-runner frame; clickable traceback navigation is not implemented.
 - CPython cancellation is cooperative; native calls are not forcibly interrupted, and legacy `.py2` cannot be cancelled safely.
-- Stopping the user's primary ScriptServer and interrupting a live long-running script were not performed as destructive GUI tests; defensive and automated checks cover these paths.
+- The new v0.3.1 startup acknowledgment, startup-only timeout, and launch-failure recovery require the controlled manual GUI checks in [the v0.3.1 reliability report](docs/execution-reliability-v031.md).
 - Install and load the generated VSIX in Visual Studio 2022; its command-line build is already passing.
-- Install the v0.3 VSIX in a fresh Visual Studio 2026 experimental profile and genuinely verify the sixth command, live streaming, cancellation acknowledgement, and deliberate ScriptServer interruption.
-- Incomplete execution workspaces are intentionally retained because Rhino may still be using them; see [the v0.3 reliability report](docs/execution-reliability-v03.md).
+- Incomplete execution workspaces are intentionally retained because Rhino may still be using them. Automatic reconciliation of a result that arrives after an uncertain timeout or disconnect is not yet implemented.
 
 ## Current milestones
 
@@ -144,8 +144,10 @@ python tools\probe_intellisense.py
 - [x] Confirmed RhinoCommon, rhinoscriptsyntax, scriptcontext, and local-module completion in Visual Studio 2026 Pylance.
 - [x] Verify save-before-run, Shift+F2, Output capture, exception reporting, Unicode paths, and deterministic multi-instance execution.
 - [x] Add no-timeout execution, cooperative cancellation, live output transport, safe workspace retention, and same-instance overlap prevention.
+- [x] Verify the v0.3 streaming, cancellation, restart, traceback, RhinoCommon, and overlap-prevention workflow in Visual Studio 2026 with Rhino 8.35.
+- [x] Add a Rhino-side startup acknowledgment, startup-only timeout, and safe process-launch recovery for v0.3.1.
 - [x] Add Windows CI producing an installable `.vsix` artifact.
-- [ ] Verify the v0.3 streaming/cancellation GUI workflow and add clickable traceback navigation.
+- [ ] Perform the controlled v0.3.1 startup-timeout/launch-recovery GUI checks and add clickable traceback navigation.
 
 ## References
 
@@ -158,4 +160,4 @@ python tools\probe_intellisense.py
 
 ## Notes for Codex
 
-Read `AGENTS.md`. Keep subsequent work on feature branches. IntelliSense and the Visual Studio 2026 end-to-end run workflow are verified. The v0.3 reliability implementation and CI are automated-test complete, while its streaming/cancellation GUI pass remains outstanding. Do not add interactive debugging until the basic integration remains stable.
+Read `AGENTS.md`. Keep subsequent work on feature branches. IntelliSense, the Visual Studio 2026 end-to-end run workflow, and the v0.3 streaming/cancellation workflow are verified. The v0.3.1 startup reliability changes are automated-test complete but still need their controlled GUI fault-injection pass. Do not add interactive debugging until the basic integration remains stable.

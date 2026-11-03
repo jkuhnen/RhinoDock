@@ -60,6 +60,8 @@ namespace RhinoVSBridge
         public string StandardOutput { get; set; } = "";
         public string StandardError { get; set; } = "";
         public bool Cancelled { get; set; }
+        public bool DispatchFailed { get; set; }
+        public bool StartupTimedOut { get; set; }
         public bool ExecutionInterrupted { get; set; }
         public string? PreservedWorkspace { get; set; }
 
@@ -92,8 +94,10 @@ namespace RhinoVSBridge
     /// </summary>
     internal sealed class RhinoCli
     {
+        private static readonly TimeSpan DefaultScriptStartupTimeout = TimeSpan.FromSeconds(15);
 
         public string Executable { get; set; }
+        public TimeSpan ScriptStartupTimeout { get; set; } = DefaultScriptStartupTimeout;
 
         public RhinoCli(string? executable = null)
         {
@@ -163,7 +167,8 @@ namespace RhinoVSBridge
             if (string.Equals(Path.GetExtension(fullPath), ".py2", StringComparison.OrdinalIgnoreCase))
                 return await ExecuteAsync(BuildRunArguments(fullPath, pipeId), Timeout.Infinite).ConfigureAwait(false);
 
-            return await RhinoExecutionRunner.RunAsync(this, fullPath, pipeId, onOutput, cancellationRequest)
+            return await RhinoExecutionRunner.RunAsync(this, fullPath, pipeId, onOutput, cancellationRequest,
+                    ScriptStartupTimeout)
                 .ConfigureAwait(false);
         }
 
