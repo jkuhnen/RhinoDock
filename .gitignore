@@ -36,6 +36,8 @@ htmlcov/
 *.cache
 *.bak
 *.rhino-bridge.bak
+Backup/
+UpgradeLog.htm
 ~$*
 
 # Local IDE settings
