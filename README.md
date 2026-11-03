@@ -110,6 +110,6 @@ See [Acknowledgements and project lineage](docs/acknowledgements.md) for the tec
 
 ## License
 
-No open-source license has been selected for Rhino VS Bridge yet. Until the repository owner adds an explicit license, copyright law reserves the rights to the source code and public availability alone does not grant permission to use, modify, or redistribute it.
+Rhino VS Bridge is open-source software licensed under the [MIT License](LICENSE).
 
-Choosing and adding a license is an owner decision that must be completed before presenting this repository as an open-source project. The absence of an identifiable license in RhinoPythonForVS does not grant Rhino VS Bridge permission to reuse that project's source code or assets.
+The acknowledgement of RhinoPythonForVS records conceptual inspiration only. No license is inferred for that project, and its source code and assets are not included in Rhino VS Bridge.

@@ -27,4 +27,4 @@ The publication audit compared the current Rhino VS Bridge repository and its av
 
 RhinoPythonForVS describes itself as an open-source project in its README, but the audit did not find an identifiable license file or license grant in its current tree or available Git history. No license terms should therefore be inferred for its code or assets. The acknowledgement above records conceptual inspiration; it is not a claim of source-code reuse, permission, contribution, partnership, or endorsement.
 
-Rhino VS Bridge likewise does not yet contain an open-source license. The repository owner must select and add an appropriate license before representing the project as open source.
+Rhino VS Bridge is independently licensed under the [MIT License](../LICENSE). That license applies only to Rhino VS Bridge and does not grant or imply rights to RhinoPythonForVS source code or assets.
