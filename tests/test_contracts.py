@@ -83,6 +83,29 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn("Execution slot released and ready for another run", package)
         self.assertNotIn("execution.MarkUncertain(null)", package)
 
+    def test_python_failures_use_a_package_owned_error_list_provider(self):
+        package = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
+        provider = (ROOT / "src/RhinoVSBridge/RhinoErrorList.cs").read_text()
+        parser = (ROOT / "src/RhinoVSBridge/PythonTracebackParser.cs").read_text()
+
+        self.assertIn("new RhinoErrorList(this)", package)
+        self.assertIn("PublishPythonErrorsAsync(result.StandardError)", package)
+        self.assertIn("_errors?.Clear()", package)
+        self.assertIn("new ErrorListProvider(serviceProvider)", provider)
+        self.assertIn('ProviderName = "Rhino VS Bridge"', provider)
+        self.assertIn("_provider.Navigate(task, VSConstants.LOGVIEWID_Code)", provider)
+        self.assertIn('string.Equals(fileName, "bridge_runner.py"', parser)
+        self.assertIn("pythonLineNumber - 1", parser)
+
+    def test_vsix_and_product_registration_are_version_040(self):
+        manifest = ET.parse(
+            ROOT / "src/RhinoVSBridge/source.extension.vsixmanifest").getroot()
+        identity = next(node for node in manifest.iter()
+                        if node.tag.endswith("Identity"))
+        self.assertEqual("0.4.0", identity.attrib["Version"])
+        package = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
+        self.assertIn('"0.4.0"', package)
+
     def test_package_requests_the_compiled_command_table_resource(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"
         code = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()

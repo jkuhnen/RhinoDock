@@ -79,8 +79,9 @@ This command changes the active Rhino document by adding a point.
 - `.py2` remains a direct legacy RhinoCode invocation; Python output and
   exceptions are not captured with the CPython runner.
 - The traceback can include one bridge-runner frame before the original script
-  frame. Original file names and line numbers are retained, but clickable
-  traceback navigation into Visual Studio is not implemented.
+  frame. Version 0.4 preserves the complete Output-pane traceback and publishes
+  the external Python frames through a package-owned Visual Studio Error List
+  provider. See [the v0.4 navigation design](python-error-navigation-v04.md).
 - This v0.2.3 test used a five-minute timeout and had no cancellation command.
   Those historical limitations are replaced by the v0.3 reliability design.
 - The no-ScriptServer and mid-execution interruption messages have automated
