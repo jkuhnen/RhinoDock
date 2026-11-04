@@ -40,9 +40,15 @@ jobs:
       - name: Run portable contract tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
 
+      - name: Package Rhino Dock VSIX
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.4.1.vsix
+
       - name: Publish VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RhinoVSBridge-v0.4.0-${{ github.sha }}
-          path: src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix
+          name: RhinoDock-v0.4.1-${{ github.sha }}
+          path: artifacts/RhinoDock-v0.4.1.vsix
           if-no-files-found: error
