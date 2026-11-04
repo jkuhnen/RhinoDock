@@ -92,7 +92,7 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn("PublishPythonErrorsAsync(result.StandardError)", package)
         self.assertIn("_errors?.Clear()", package)
         self.assertIn("new ErrorListProvider(serviceProvider)", provider)
-        self.assertIn('ProviderName = "Rhino VS Bridge"', provider)
+        self.assertIn('ProviderName = "Rhino Dock"', provider)
         self.assertIn("_provider.Navigate(navigationTask, VSConstants.LOGVIEWID_Code)", provider)
         self.assertIn("Document = task.Document", provider)
         self.assertIn("ToTaskProviderLine(task.Line)", provider)
