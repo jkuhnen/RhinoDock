@@ -16,7 +16,7 @@ namespace RhinoVSBridge
             _provider = new ErrorListProvider(serviceProvider)
             {
                 ProviderGuid = ProviderId,
-                ProviderName = "Rhino VS Bridge"
+                ProviderName = "Rhino Dock"
             };
         }
 
@@ -39,7 +39,7 @@ namespace RhinoVSBridge
                 {
                     ErrorCategory = TaskErrorCategory.Error,
                     Category = TaskCategory.User,
-                    Text = "Rhino VS Bridge: " + traceback.ExceptionMessage,
+                    Text = "Rhino Dock: " + traceback.ExceptionMessage,
                     Document = frame.FilePath,
                     Line = frame.VisualStudioLineNumber,
                     Column = 0
