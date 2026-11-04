@@ -1,4 +1,6 @@
-# Codex instructions: Rhino VS Bridge
+# Codex instructions: Rhino Dock
+
+Brand: Rhino Dock (formerly Rhino VS Bridge). Retain existing internal `RhinoVSBridge` namespaces, VSIX identity, GUIDs, paths and generated IntelliSense directories for backwards compatibility; do not rename them casually.
 
 Goal: build a robust Visual Studio 2026/2022 VSIX to edit Rhino 8 Python 3 scripts in Visual Studio, with PTVS IntelliSense and reliable direct execution in Rhino using the official `rhinocode` CLI. Do NOT confuse Visual Studio with Visual Studio Code.
 
