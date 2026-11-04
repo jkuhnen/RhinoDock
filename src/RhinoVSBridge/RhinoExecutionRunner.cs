@@ -336,7 +336,7 @@ namespace RhinoVSBridge
                 "            exec(code, scope, scope)\n" +
                 "        except BridgeCancellation as cancellation:\n" +
                 "            success, cancelled = False, True\n" +
-                "            print('Rhino VS Bridge: ' + str(cancellation), file=sys.stderr)\n" +
+                "            print('Rhino Dock: ' + str(cancellation), file=sys.stderr)\n" +
                 "        except BaseException:\n" +
                 "            success = False\n" +
                 "            traceback.print_exc()\n" +

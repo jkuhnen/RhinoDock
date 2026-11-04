@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="180 180 880 880" width="880" height="880" role="img" aria-label="Rhino Dock symbol">
+<title>Rhino Dock</title>
+<defs><clipPath id="ring-only"><path clip-rule="evenodd" d="M 1022,620 A 400,400 0 1 0 222,620 A 400,400 0 1 0 1022,620 Z M 904,620 A 282,282 0 1 1 340,620 A 282,282 0 1 1 904,620 Z"/></clipPath></defs>
+<circle cx="622" cy="620" r="341" stroke="#202A30" stroke-width="118" fill="none"/>
+<path d="M 434 453 L 412 484 L 391 524 L 381 552 L 376 572 L 372 600 L 373 643 L 380 679 L 395 719 L 412 749 L 431 728 L 444 719 L 466 710 L 489 708 L 522 716 L 614 758 L 644 769 L 654 771 L 692 724 L 722 683 L 745 647 L 756 625 L 766 597 L 771 572 L 771 525 L 748 567 L 733 587 L 714 606 L 696 619 L 681 626 L 668 628 L 654 618 L 660 591 L 660 580 L 656 567 L 649 575 L 636 585 L 623 590 L 611 590 L 598 583 L 586 573 L 563 545 L 553 527 L 550 518 L 568 470 L 567 469 L 550 473 L 535 480 L 511 499 L 476 480 Z M 569 611 L 572 610 L 591 619 L 611 633 L 598 638 L 589 638 L 583 636 L 574 628 L 570 619 Z" fill="#202A30" fill-rule="evenodd"/>
+<path clip-path="url(#ring-only)" d="M 901 620 L 983 544 L 983 576 L 1070 576 L 1070 664 L 983 664 L 983 696 Z" fill="#087EEB"/>
+</svg>

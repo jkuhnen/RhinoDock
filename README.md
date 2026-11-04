@@ -1,20 +1,28 @@
-# Rhino VS Bridge
+<img src="assets/branding/rhino-dock-icon.svg" alt="Rhino Dock symbol" width="100" />
 
-Rhino VS Bridge connects **full Microsoft Visual Studio 2026** to Rhino 8 for editing and running Rhino Python 3 scripts. It provides PTVS IntelliSense for Rhino APIs, direct execution through RhinoCode, live output, cancellation, execution recovery, and navigation from Python runtime errors to the corresponding source line.
+# Rhino Dock
 
-> Rhino VS Bridge is for Microsoft Visual Studio, not Visual Studio Code (VS Code).
+<img src="assets/branding/rhino-dock-wordmark.svg" alt="Rhino Dock" width="340" />
 
-The stable release is **v0.4.0**. Breakpoint debugging and `debugpy` integration are not supported.
+**Python Development for Rhino 8 in Visual Studio**
+
+Rhino Dock connects **full Microsoft Visual Studio 2026** to Rhino 8 for editing and running Rhino Python 3 scripts. It provides PTVS IntelliSense for Rhino APIs, direct execution through RhinoCode, live output, cancellation, execution recovery, and navigation from Python runtime errors to the corresponding source line.
+
+> Rhino Dock is for Microsoft Visual Studio, not Visual Studio Code (VS Code).
+
+> **Rename notice:** Rhino Dock was formerly known as **Rhino VS Bridge**. The published v0.4.0 installer (`RhinoVSBridge-v0.4.0.vsix`) retains its original name and UI labels. The next release will use the new branding.
+
+The latest published stable release is **v0.4.0**. Breakpoint debugging and `debugpy` integration are not supported.
 
 ## Background and motivation
 
-Inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-chen/RhinoPythonForVS), Rhino VS Bridge revisits the idea of developing and running Rhino Python scripts from Visual Studio. Rhino 8's CPython 3 support and RhinoCode scripting infrastructure make a new integration possible: an independent implementation for Visual Studio 2026 that uses RhinoCode instead of the legacy IronPython 2.7 and CodeListener workflow.
+Inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-chen/RhinoPythonForVS), Rhino Dock revisits the idea of developing and running Rhino Python scripts from Visual Studio. Rhino 8's CPython 3 support and RhinoCode scripting infrastructure make a new integration possible: an independent implementation for Visual Studio 2026 that uses RhinoCode instead of the legacy IronPython 2.7 and CodeListener workflow.
 
 ## Main features
 
 - Rhino 8 CPython script execution from Visual Studio with **Shift+F2**.
 - RhinoCommon, `rhinoscriptsyntax`, and `scriptcontext` IntelliSense through the Microsoft Python development workload.
-- Live standard output and error output in the **Rhino VS Bridge** Output pane.
+- Live standard output and error output in the **Rhino Dock** Output pane.
 - Cooperative cancellation for running scripts.
 - Native Visual Studio Error List entries that open Python files at traceback locations, including files outside the current solution.
 - Explicit Rhino-instance selection and conservative recovery when execution state is uncertain.
@@ -22,7 +30,7 @@ Inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-che
 
 ## Download
 
-Download `RhinoVSBridge-v0.4.0.vsix` from the [v0.4.0 GitHub Release](https://github.com/jkuhnen/RhinoVSBridge/releases/tag/v0.4.0). The release also provides installation instructions and a SHA-256 checksum.
+Download the existing `RhinoVSBridge-v0.4.0.vsix` from the [v0.4.0 GitHub Release](https://github.com/jkuhnen/RhinoVSBridge/releases/tag/v0.4.0). The release also provides installation instructions and a SHA-256 checksum.
 
 The VSIX is currently unsigned, so Visual Studio may display an unknown-publisher warning. Verify that the checksum matches the published `SHA256SUMS.txt` before installing it.
 
@@ -48,11 +56,11 @@ scriptcontext.doc.Views.Redraw()
 print("Added point:", point)
 ```
 
-Execution messages and Python output appear under **View > Output**; select **Rhino VS Bridge** in the output-source list. Python runtime failures also appear in **View > Error List**. Double-click a Rhino VS Bridge error to open its file at the reported line. To request cancellation, choose **Tools > Rhino: Cancel Running Script**.
+Execution messages and Python output appear under **View > Output**; select **Rhino VS Bridge** in the v0.4.0 release (or **Rhino Dock** in updated versions) in the output-source list. Python runtime failures also appear in **View > Error List**. Double-click a Rhino Dock error to open its file at the reported line. To request cancellation, choose **Tools > Rhino: Cancel Running Script**.
 
 During verified first-run testing, IntelliSense became available after **Rhino: Configure Project IntelliSense** and the first Shift+F2 execution. Running a script is not intended to be a technical prerequisite for IntelliSense; if completions do not appear immediately, follow the troubleshooting steps below.
 
-`CodeListener` is not required. Rhino VS Bridge uses Rhino 8's official RhinoCode command-line interface.
+`CodeListener` is not required. Rhino Dock uses Rhino 8's official RhinoCode command-line interface.
 
 ## Requirements
 
@@ -83,7 +91,7 @@ Use **Tools > Rhino: Run Active Python Script** to check whether another extensi
 
 ### A previous execution is still blocking new runs
 
-Check the Rhino VS Bridge Output pane. The extension deliberately blocks overlapping executions while Rhino may still be running a script. It releases the slot automatically only after it validates a terminal result for that exact execution and Rhino instance. Restart Rhino and Visual Studio only if the execution cannot be reconciled.
+Check the Rhino Dock Output pane. The extension deliberately blocks overlapping executions while Rhino may still be running a script. It releases the slot automatically only after it validates a terminal result for that exact execution and Rhino instance. Restart Rhino and Visual Studio only if the execution cannot be reconciled.
 
 ## Known limitations
 
@@ -106,14 +114,20 @@ Check the Rhino VS Bridge Output pane. The extension deliberately blocks overlap
 
 ## Acknowledgements
 
-Rhino VS Bridge was conceptually inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-chen/RhinoPythonForVS), the pioneering Visual Studio integration for Rhino Python created at [DesignToProduction](https://www.designtoproduction.com/) and shared as an original open-source project. RhinoPythonForVS demonstrated the value of editing, IntelliSense, and send-to-Rhino execution from Visual Studio.
+Rhino Dock was conceptually inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-chen/RhinoPythonForVS), the pioneering Visual Studio integration for Rhino Python created at [DesignToProduction](https://www.designtoproduction.com/) and shared as an original open-source project. RhinoPythonForVS demonstrated the value of editing, IntelliSense, and send-to-Rhino execution from Visual Studio.
 
-Rhino VS Bridge is an independent modern implementation for Rhino 8 CPython and Visual Studio 2026. It uses McNeel's RhinoCode CLI rather than CodeListener and does not import the original project's source code or assets. Jingcheng Chen and DesignToProduction have not contributed to, reviewed, or endorsed Rhino VS Bridge.
+Rhino Dock is an independent modern implementation for Rhino 8 CPython and Visual Studio 2026. It uses McNeel's RhinoCode CLI rather than CodeListener and does not import the original project's source code or assets. Jingcheng Chen and DesignToProduction have not contributed to, reviewed, or endorsed Rhino Dock.
 
 See [Acknowledgements and project lineage](docs/acknowledgements.md) for the technical relationship and attribution details.
 
+## Branding and compatibility
+
+The [symbol and wordmark](docs/branding.md) are supplied as separate SVG files.
+
+The new public name is **Rhino Dock**. Internal identifiers, command GUIDs and existing VSIX identity remain unchanged so users can upgrade. The historical v0.4.0 release remains available under its original name. The GitHub repository will be renamed separately.
+
 ## License
 
-Rhino VS Bridge is open-source software licensed under the [MIT License](LICENSE).
+Rhino Dock is open-source software licensed under the [MIT License](LICENSE).
 
-The acknowledgement of RhinoPythonForVS records conceptual inspiration only. No license is inferred for that project, and its source code and assets are not included in Rhino VS Bridge.
+The acknowledgement of RhinoPythonForVS records conceptual inspiration only. No license is inferred for that project, and its source code and assets are not included in Rhino Dock.
