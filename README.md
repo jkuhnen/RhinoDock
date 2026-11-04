@@ -6,6 +6,10 @@ Rhino VS Bridge connects **full Microsoft Visual Studio 2026** to Rhino 8 for ed
 
 The stable release is **v0.4.0**. Breakpoint debugging and `debugpy` integration are not supported.
 
+## Background and motivation
+
+Inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-chen/RhinoPythonForVS), Rhino VS Bridge revisits the idea of developing and running Rhino Python scripts from Visual Studio. Rhino 8's CPython 3 support and RhinoCode scripting infrastructure make a new integration possible: an independent implementation for Visual Studio 2026 that uses RhinoCode instead of the legacy IronPython 2.7 and CodeListener workflow.
+
 ## Main features
 
 - Rhino 8 CPython script execution from Visual Studio with **Shift+F2**.
