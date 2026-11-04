@@ -15,7 +15,7 @@ using Task = System.Threading.Tasks.Task;
 namespace RhinoVSBridge
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("Rhino VS Bridge", "Rhino 8 CPython execution for Visual Studio", "0.4.0")]
+    [InstalledProductRegistration("Rhino Dock", "Rhino 8 CPython execution for Visual Studio", "0.4.1")]
     [ProvideMenuResource("RhinoVSBridge.CTMENU", 1)]
     [Guid(PackageGuid)]
     public sealed class BridgePackage : AsyncPackage
@@ -69,7 +69,7 @@ namespace RhinoVSBridge
                     {
                         await LogAsync("ERROR: " + ex.Message + Environment.NewLine);
                         await JoinableTaskFactory.SwitchToMainThreadAsync();
-                        MessageBox.Show(ex.Message, "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show(ex.Message, "Rhino Dock", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 });
             }, new CommandID(CommandSet, id)));
@@ -82,7 +82,7 @@ namespace RhinoVSBridge
             {
                 await LogAsync("A Rhino script command is currently running. Wait for completion or request cancellation.\r\n");
                 MessageBox.Show("A Rhino script is currently running. Wait for completion or request cancellation.",
-                    "Rhino VS Bridge");
+                    "Rhino Dock");
                 return;
             }
             if (_dte?.ActiveDocument == null) { MessageBox.Show("Open a .py file first."); return; }
@@ -94,10 +94,10 @@ namespace RhinoVSBridge
             if (!string.Equals(Path.GetExtension(file), ".py", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(Path.GetExtension(file), ".py2", StringComparison.OrdinalIgnoreCase))
             {
-                MessageBox.Show("The active document must be a Rhino Python .py or .py2 script.", "Rhino VS Bridge");
+                MessageBox.Show("The active document must be a Rhino Python .py or .py2 script.", "Rhino Dock");
                 return;
             }
-            if (!File.Exists(file)) { MessageBox.Show("The active script could not be saved.", "Rhino VS Bridge"); return; }
+            if (!File.Exists(file)) { MessageBox.Show("The active script could not be saved.", "Rhino Dock"); return; }
 
             _running = true;
             try
@@ -160,7 +160,7 @@ namespace RhinoVSBridge
                         await LogAsync(result.DisplayText + "\r\n");
                         throw new InvalidOperationException(
                             "RhinoCode could not dispatch the script. No Rhino-side runner started, so it is safe to try again. " +
-                            "See the Rhino VS Bridge output for details.");
+                            "See the Rhino Dock output for details.");
                     }
                     if (result.ExecutionInterrupted)
                     {
@@ -201,7 +201,7 @@ namespace RhinoVSBridge
                                 "The selected Rhino ScriptServer connection was lost. Restart ScriptServer and select the instance again.");
                         }
                         throw new InvalidOperationException(
-                            "Rhino reported that the script failed. See the Python exception and traceback above in the Rhino VS Bridge output.");
+                            "Rhino reported that the script failed. See the Python exception and traceback above in the Rhino Dock output.");
                     }
                     await LogAsync("=== Script completed successfully ===\r\n");
                 }
@@ -222,7 +222,7 @@ namespace RhinoVSBridge
                 await LogAsync("No bridge execution is active for the selected Rhino instance; the slot is ready.\r\n");
                 await JoinableTaskFactory.SwitchToMainThreadAsync();
                 MessageBox.Show("No Rhino script started by this extension is currently running.",
-                    "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "Rhino Dock", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (cancellation.Status == CancellationRequestStatus.AlreadyCompleted)
@@ -239,7 +239,7 @@ namespace RhinoVSBridge
                 await JoinableTaskFactory.SwitchToMainThreadAsync();
                 MessageBox.Show("The active .py2 script cannot be cancelled safely. " +
                     "The bridge will not terminate rhinocode.exe because that does not prove execution stopped inside Rhino.",
-                    "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "Rhino Dock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             if (cancellation.Status == CancellationRequestStatus.Requested && execution != null)
@@ -359,7 +359,7 @@ namespace RhinoVSBridge
             await JoinableTaskFactory.SwitchToMainThreadAsync();
             if (instances.Count == 0)
             {
-                MessageBox.Show("No Rhino instances found. Run StartScriptServer in Rhino 8.", "Rhino VS Bridge");
+                MessageBox.Show("No Rhino instances found. Run StartScriptServer in Rhino 8.", "Rhino Dock");
                 return;
             }
             var selected = ChooseInstance(instances);
@@ -408,7 +408,7 @@ namespace RhinoVSBridge
             if (paths.Count == 0)
             {
                 MessageBox.Show("No Rhino 8 Python stubs found. Open Rhino's ScriptEditor once, then try again.",
-                    "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "Rhino Dock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             var project = _dte?.ActiveDocument?.ProjectItem?.ContainingProject;
@@ -422,7 +422,7 @@ namespace RhinoVSBridge
                 Clipboard.SetText(list);
                 MessageBox.Show("No .pyproj selected. Rhino search paths were copied to clipboard. " +
                     "Open a Python project and add them under Search Paths.\r\n\r\n" + list,
-                    "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "Rhino Dock", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             var confirmation = MessageBox.Show(
@@ -430,7 +430,7 @@ namespace RhinoVSBridge
                 "\r\n\r\nA .rhino-bridge.bak backup will be made first. " +
                 "The command updates the discovered Rhino paths, removes obsolete paths managed by the bridge, and adds a project-local " +
                 "scriptcontext typing shim. Close and reopen the solution afterward.",
-                "Rhino VS Bridge", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+                "Rhino Dock", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
             if (confirmation != DialogResult.OK) return;
             var result = IntelliSensePaths.ConfigurePythonProject(projectFile, paths);
             MessageBox.Show("Added " + result.AddedPaths + " and removed " + result.RemovedPaths +
@@ -438,12 +438,12 @@ namespace RhinoVSBridge
                 (result.CompatibilityStubWritten ? "Created the scriptcontext typing shim. " : string.Empty) +
                 "Close and reopen the solution, then check RhinoCommon, rhinoscriptsyntax, " +
                 "scriptcontext, and local-module completion.",
-                "Rhino VS Bridge", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                "Rhino Dock", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private async Task ShowDiagnosticsAsync()
         {
-            await LogAsync("\r\n== Rhino VS Bridge diagnostics ==\r\n");
+            await LogAsync("\r\n== Rhino Dock diagnostics ==\r\n");
             await LogAsync("RhinoCode CLI: " + _cli.Executable + "\r\n");
             foreach (var path in IntelliSensePaths.Discover())
                 await LogAsync("Python search path: " + path + "\r\n");
@@ -496,7 +496,7 @@ namespace RhinoVSBridge
                 var count = _errors?.Publish(traceback) ?? 0;
                 if (count > 0)
                     await LogAsync("Published " + count +
-                        " navigable Python traceback location(s) to Error List > Rhino VS Bridge.\r\n");
+                        " navigable Python traceback location(s) to Error List > Rhino Dock.\r\n");
             }
             catch (Exception ex)
             {
@@ -514,7 +514,7 @@ namespace RhinoVSBridge
             }
             catch (Exception ex)
             {
-                await LogAsync("Stale Rhino VS Bridge Error List entries could not be cleared: " +
+                await LogAsync("Stale Rhino Dock Error List entries could not be cleared: " +
                     ex.Message + "\r\n");
             }
         }
@@ -525,9 +525,9 @@ namespace RhinoVSBridge
             for (var index = 1; index <= panes.Count; index++)
             {
                 var pane = panes.Item(index);
-                if (pane.Name == "Rhino VS Bridge") return pane;
+                if (pane.Name == "Rhino Dock") return pane;
             }
-            return panes.Add("Rhino VS Bridge");
+            return panes.Add("Rhino Dock");
         }
     }
 }
