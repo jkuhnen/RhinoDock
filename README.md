@@ -1,4 +1,8 @@
+<img src="assets/branding/rhino-dock-icon.svg" alt="Rhino Dock symbol" width="100" />
+
 # Rhino Dock
+
+<img src="assets/branding/rhino-dock-wordmark.svg" alt="Rhino Dock" width="340" />
 
 **Python Development for Rhino 8 in Visual Studio**
 
@@ -117,6 +121,8 @@ Rhino Dock is an independent modern implementation for Rhino 8 CPython and Visua
 See [Acknowledgements and project lineage](docs/acknowledgements.md) for the technical relationship and attribution details.
 
 ## Branding and compatibility
+
+The [symbol and wordmark](docs/branding.md) are supplied as separate SVG files.
 
 The new public name is **Rhino Dock**. Internal identifiers, command GUIDs and existing VSIX identity remain unchanged so users can upgrade. The historical v0.4.0 release remains available under its original name. The GitHub repository will be renamed separately.
 
