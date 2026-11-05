@@ -23,6 +23,9 @@
   <ItemGroup>
     <VSCTCompile Include="RhinoVSBridge.vsct" />
     <None Update="source.extension.vsixmanifest" />
+    <Content Include="Resources/RhinoDockIcon.png">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
     <Content Include="$(IntermediateOutputPath)RhinoDockPythonProject.zip">
       <IncludeInVSIX>true</IncludeInVSIX>
       <VSIXSubPath>ProjectTemplates/Python</VSIXSubPath>
