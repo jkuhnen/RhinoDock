@@ -2,8 +2,6 @@
 
 # Rhino Dock
 
-<img src="assets/branding/rhino-dock-wordmark.svg" alt="Rhino Dock" width="340" />
-
 **Python Development for Rhino 8 in Visual Studio**
 
 Rhino Dock connects **full Microsoft Visual Studio 2026** to Rhino 8 for editing and running Rhino Python 3 scripts. It provides PTVS IntelliSense for Rhino APIs, direct execution through RhinoCode, live output, cancellation, execution recovery, and navigation from Python runtime errors to the corresponding source line.
@@ -122,9 +120,9 @@ See [Acknowledgements and project lineage](docs/acknowledgements.md) for the tec
 
 ## Branding and compatibility
 
-The [symbol and wordmark](docs/branding.md) are supplied as separate SVG files.
+The [trion-derived logo](docs/branding.md) is provided as one SVG image; the product name is rendered as plain text.
 
-The new public name is **Rhino Dock**. Internal identifiers, command GUIDs and existing VSIX identity remain unchanged so users can upgrade. The historical v0.4.0 release remains available under its original name. The GitHub repository will be renamed separately.
+The new public name is **Rhino Dock**. Internal identifiers, command GUIDs and existing VSIX identity remain unchanged so users can upgrade. The historical v0.4.0 release remains available under its original name. The GitHub repository is named `RhinoDock`.
 
 ## License
 
