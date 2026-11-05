@@ -55,6 +55,26 @@ jobs:
                 throw "Missing Rhino Dock project template entry in VSIX: $required"
               }
             }
+            # Validate the actual VSIX asset declaration, not merely the presence
+            # of the extracted template files. An obsolete .zip path was previously
+            # accepted by build but hidden the template from Visual Studio.
+            $manifestEntry = $zip.GetEntry("extension.vsixmanifest")
+            if (-not $manifestEntry) { throw "Missing extension.vsixmanifest" }
+            $reader = [System.IO.StreamReader]::new($manifestEntry.Open())
+            try { [xml]$manifest = $reader.ReadToEnd() } finally { $reader.Dispose() }
+            $templateAsset = $manifest.PackageManifest.Assets.Asset | Where-Object {
+              $_.Type -eq "Microsoft.VisualStudio.ProjectTemplate"
+            }
+            if (-not $templateAsset -or $templateAsset.Path -ne "ProjectTemplates") {
+              throw "The ProjectTemplate asset must reference the embedded ProjectTemplates directory"
+            }
+            $templateIndexEntry = $zip.GetEntry("ProjectTemplates/templateManifest0.noloc.vstman")
+            $indexReader = [System.IO.StreamReader]::new($templateIndexEntry.Open())
+            try { $indexText = $indexReader.ReadToEnd() } finally { $indexReader.Dispose() }
+            if ($indexText -notmatch "Rhino Dock Python Project" -or
+                $indexText -notmatch "RhinoDockPython.vstemplate") {
+              throw "VSSDK template index does not list Rhino Dock Python Project"
+            }
           } finally { $zip.Dispose() }
 
       - name: Run product C# tests
