@@ -99,17 +99,17 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn('string.Equals(fileName, "bridge_runner.py"', parser)
         self.assertIn("pythonLineNumber - 1", parser)
 
-    def test_vsix_and_product_registration_are_version_051(self):
+    def test_vsix_and_product_registration_are_version_052(self):
         manifest = ET.parse(
             ROOT / "src/RhinoVSBridge/source.extension.vsixmanifest").getroot()
         identity = next(node for node in manifest.iter()
                         if node.tag.endswith("Identity"))
-        self.assertEqual("0.5.1", identity.attrib["Version"])
+        self.assertEqual("0.5.2", identity.attrib["Version"])
         display = next(node for node in manifest.iter()
                        if node.tag.endswith("DisplayName"))
         self.assertEqual("Rhino Dock", display.text)
         package = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
-        self.assertIn('"0.5.1"', package)
+        self.assertIn('"0.5.2"', package)
 
     def test_package_requests_the_compiled_command_table_resource(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"
