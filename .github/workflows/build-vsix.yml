@@ -95,8 +95,13 @@ jobs:
             if (-not $projectEntry) { throw "Template project source missing: $projectFile" }
             $projReader = [System.IO.StreamReader]::new($projectEntry.Open())
             try { $projectText = $projReader.ReadToEnd() } finally { $projReader.Dispose() }
-            if ($projectText -notmatch "888888a0-9f3d-457c-b088-3a5042f75d52") {
-              throw "Python project is missing the PTVS project-type GUID"
+            # The working Visual Studio 2026 Python template relies on the
+            # Python Tools targets import and an unbraced $guid1$ placeholder.
+            # Do not require a hard-coded ProjectTypeGuids property here.
+            if ($projectText -notmatch [regex]::Escape('<ProjectGuid>$guid1$</ProjectGuid>') -or
+                $projectText -notmatch 'Microsoft.PythonTools.targets' -or
+                $projectText -match 'rhino-vs-bridge|[A-Z]:\\\\Users\\\\') {
+              throw "Generated Python project differs from supported VS 2026 template or contains machine-specific search paths"
             }
             # Verify the installed icon is at least 256px and has transparency
             # (avoid blurry icons and a solid white rectangle in dark mode).
