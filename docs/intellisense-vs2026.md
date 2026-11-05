@@ -4,6 +4,27 @@ Verified on 2026-10-15 with Visual Studio Community 2026 18.11, PTVS, Pylance
 2026.3.1 (Pyright 1.1.411), Rhino 8.35, and Rhino's CPython 3.9 stub tree.
 This document concerns Visual Studio, not Visual Studio Code.
 
+## Automatic setup for new Rhino Dock projects (v0.6.0)
+
+The **Rhino Dock Python Project** template now includes a Visual Studio `IWizard`
+extension that discovers locally generated RhinoCode typing directories **before**
+PTVS loads the new project. It injects the resolved paths into the project's
+`<SearchPath>` element, and creates the project-local
+`.rhino-dock/typings/scriptcontext.pyi` shim after generation. This avoids
+editing a loaded `.pyproj` file and eliminates a required project reload on
+new project creation.
+
+**Before creating the project**, launch Rhino 8 and open the ScriptEditor at
+least once to generate the `.rhinocode/py39-rh8` stubs on that computer.
+Creating the project without Rhino stubs still works, but only the local shim
+path will be present; after Rhino has generated its stubs, use
+**Tools > Rhino: Configure Project IntelliSense** once and reopen the solution.
+The same manual command remains appropriate for existing Python projects.
+
+This automatic setup has automated contract/build coverage. It requires a
+manual end-to-end verification of a newly created project in Visual Studio
+2026 before v0.6.0 is released publicly.
+
 ## How PTVS passes paths to Pylance
 
 The Visual Studio Python project system reads the semicolon-separated
