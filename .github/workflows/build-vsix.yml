@@ -96,6 +96,12 @@ jobs:
             }
             $templateReader = [System.IO.StreamReader]::new($templateEntry.Open())
             try { [xml]$template = $templateReader.ReadToEnd() } finally { $templateReader.Dispose() }
+            # Read the real strong name from the compiled DLL, not a guessed token.
+            $dllPath = "src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.dll"
+            $assemblyIdentity = [System.Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $dllPath))
+            $actualToken = [System.BitConverter]::ToString($assemblyIdentity.GetPublicKeyToken()).Replace("-", "").ToLowerInvariant()
+            Write-Host "Rhino Dock wizard actual assembly: $($assemblyIdentity.FullName)"
+            Write-Host "Rhino Dock wizard public key token: $actualToken"
             # Validate the template wizard registration and its embedded assembly.
             $wizardAssembly = $template.VSTemplate.WizardExtension.Assembly
             $wizardClass = $template.VSTemplate.WizardExtension.FullClassName
