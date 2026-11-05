@@ -7,6 +7,30 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class IntegrationContractTests(unittest.TestCase):
+    def test_new_project_auto_configures_rhino_intellisense(self):
+        template = ROOT / "src/RhinoVSBridge/Templates/RhinoDockPython"
+        project = (template / "RhinoDockPython.pyproj").read_text(encoding="utf-8")
+        self.assertIn("<SearchPath>$rhinodocksearchpaths$</SearchPath>", project)
+        vstemplate = ET.parse(template / "RhinoDockPython.vstemplate")
+        ns = {"v": "http://schemas.microsoft.com/developer/vstemplate/2005"}
+        assembly = vstemplate.findtext("v:WizardExtension/v:Assembly", namespaces=ns)
+        wizard_type = vstemplate.findtext("v:WizardExtension/v:FullClassName", namespaces=ns)
+        self.assertEqual(
+            "RhinoVSBridge, Version=0.6.0.0, Culture=neutral, PublicKeyToken=b9cd0dfbf46267fd",
+            assembly,
+        )
+        self.assertEqual("RhinoVSBridge.RhinoDockProjectWizard", wizard_type)
+        source = (ROOT / "src/RhinoVSBridge/RhinoDockProjectWizard.cs").read_text(encoding="utf-8")
+        self.assertIn("IWizard", source)
+        self.assertIn('replacementsDictionary["$rhinodocksearchpaths$"]', source)
+        self.assertIn("IntelliSensePaths.Discover()", source)
+        self.assertIn("IntelliSensePaths.EnsureCompatibilityStubs(project.FullName)", source)
+        self.assertIn("SecurityElement.Escape", source)
+        csproj = (ROOT / "src/RhinoVSBridge/RhinoVSBridge.csproj").read_text(encoding="utf-8")
+        self.assertIn("<SignAssembly>true</SignAssembly>", csproj)
+        self.assertIn("<AssemblyVersion>0.6.0.0</AssemblyVersion>", csproj)
+        self.assertTrue((ROOT / "src/RhinoVSBridge/rhino-dock.snk").is_file())
+
     def test_registered_commands_have_matching_vsct_ids(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"
         tree = ET.parse(vsct)
