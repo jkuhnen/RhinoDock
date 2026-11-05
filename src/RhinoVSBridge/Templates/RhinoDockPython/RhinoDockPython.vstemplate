@@ -16,4 +16,8 @@
       <ProjectItem ReplaceParameters="true" TargetFileName="main.py">main.py</ProjectItem>
     </Project>
   </TemplateContent>
+  <WizardExtension>
+    <Assembly>RhinoVSBridge, Version=0.6.0.0, Culture=neutral, PublicKeyToken=b9cd0dfbf46267fd</Assembly>
+    <FullClassName>RhinoVSBridge.RhinoDockProjectWizard</FullClassName>
+  </WizardExtension>
 </VSTemplate>
