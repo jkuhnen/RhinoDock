@@ -42,9 +42,17 @@ jobs:
           $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $vsixPath))
           try {
             $zip.Entries | ForEach-Object { Write-Host "VSIX entry: $($_.FullName)" }
-            $required = "ProjectTemplates/Python/RhinoDockPythonProject.zip"
-            if (-not ($zip.Entries | Where-Object { $_.FullName.Replace("\\", "/") -eq $required })) {
-              throw "Missing Rhino Dock project template in VSIX: $required"
+            # VSSDK expands the project template ZIP and indexes the .vstemplate.
+            $requiredEntries = @(
+              "ProjectTemplates/templateManifest0.noloc.vstman",
+              "ProjectTemplates/Python/RhinoDockPythonProject/RhinoDockPython.vstemplate",
+              "ProjectTemplates/Python/RhinoDockPythonProject/RhinoDockPython.pyproj",
+              "ProjectTemplates/Python/RhinoDockPythonProject/main.py"
+            )
+            foreach ($required in $requiredEntries) {
+              if (-not ($zip.Entries | Where-Object { $_.FullName.Replace("\\", "/") -eq $required })) {
+                throw "Missing Rhino Dock project template entry in VSIX: $required"
+              }
             }
           } finally { $zip.Dispose() }
 
