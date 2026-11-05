@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AssemblyName>RhinoVSBridge</AssemblyName>
+    <AssemblyVersion>0.6.0.0</AssemblyVersion>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>rhino-dock.snk</AssemblyOriginatorKeyFile>
     <RootNamespace>RhinoVSBridge</RootNamespace>
     <UseWindowsForms>true</UseWindowsForms>
     <OutputType>Library</OutputType>
@@ -17,6 +20,7 @@
   <ItemGroup>
     <Reference Include="System.Design" />
     <ProjectCapability Include="CreateVsixContainer" />
+    <PackageReference Include="Microsoft.VisualStudio.TemplateWizardInterface" Version="17.10.40170" />
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="18.5.38461" PrivateAssets="all" />
   </ItemGroup>
