@@ -136,11 +136,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
-          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.5.4.vsix
+          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.5.5.vsix
 
       - name: Publish VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RhinoDock-v0.5.4-${{ github.sha }}
-          path: artifacts/RhinoDock-v0.5.4.vsix
+          name: RhinoDock-v0.5.5-${{ github.sha }}
+          path: artifacts/RhinoDock-v0.5.5.vsix
           if-no-files-found: error

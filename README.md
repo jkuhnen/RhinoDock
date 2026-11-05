@@ -8,15 +8,15 @@ Rhino Dock connects **full Microsoft Visual Studio 2026** to Rhino 8 for editing
 
 > Rhino Dock is for Microsoft Visual Studio, not Visual Studio Code (VS Code).
 
-> **Rename notice:** Rhino Dock was formerly known as **Rhino VS Bridge**. The published v0.4.0 installer (`RhinoVSBridge-v0.4.0.vsix`) retains its original name and UI labels. The next release will use the new branding.
+> **Rename notice:** Rhino Dock was formerly known as **Rhino VS Bridge**. Historical v0.4.0 installers retain their original name and UI labels.
 
-The latest published stable release is **v0.4.0**. **v0.5.4 is under development** and is not yet released. Breakpoint debugging and `debugpy` integration are not supported.
+The latest published stable release is **[v0.5.4](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.5.4)**. **v0.5.5** is a publisher-metadata maintenance update being prepared for Visual Studio Marketplace. Breakpoint debugging and `debugpy` integration are not supported.
 
 ## Background and motivation
 
 Inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-chen/RhinoPythonForVS), Rhino Dock revisits the idea of developing and running Rhino Python scripts from Visual Studio. Rhino 8's CPython 3 support and RhinoCode scripting infrastructure make a new integration possible: an independent implementation for Visual Studio 2026 that uses RhinoCode instead of the legacy IronPython 2.7 and CodeListener workflow.
 
-## Under development (v0.5.4)
+## What's new in v0.5.4
 
 - Mirror Python 3 `print()` output to both **Output > Rhino Dock** in Visual Studio and Rhino's command history.
 - Add a **Rhino Dock Python Project** template to **File > New > Project**. It creates a regular PTVS Python project with a simple `main.py` example. Use **Tools > Rhino: Configure Project IntelliSense** once after creation; the template does not yet automate machine-specific search paths.
@@ -37,18 +37,18 @@ Inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-che
 
 ## Download
 
-Download the existing `RhinoVSBridge-v0.4.0.vsix` from the [v0.4.0 GitHub Release](https://github.com/jkuhnen/RhinoVSBridge/releases/tag/v0.4.0). The release also provides installation instructions and a SHA-256 checksum.
+Download `RhinoDock-v0.5.4.vsix` from the [latest stable GitHub Release](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.5.4). The archived [v0.4.0 release](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.4.0) remains available for reference.
 
-The VSIX is currently unsigned, so Visual Studio may display an unknown-publisher warning. Verify that the checksum matches the published `SHA256SUMS.txt` before installing it.
+The VSIX is currently unsigned, so Visual Studio or Windows may warn about an unknown publisher. Download installers only from the official repository's Releases page.
 
 ## Quick Start
 
 No Visual Studio extension-development experience is required.
 
 1. Install **Visual Studio 2026** with the **Python development** workload, and install **Rhino 8**.
-2. Download `RhinoVSBridge-v0.4.0.vsix`, close Visual Studio, run the VSIX installer, and restart Visual Studio.
+2. Download `RhinoDock-v0.5.4.vsix`, close Visual Studio, run the VSIX installer, and restart Visual Studio.
 3. Start Rhino, open Rhino's **ScriptEditor** once, then run `StartScriptServer` in Rhino's command line. Keep Rhino open.
-4. Open or create a Python project in Visual Studio. Choose **Tools > Rhino: Configure Project IntelliSense**, then reload the project if Visual Studio asks.
+4. Create a **Rhino Dock Python Project** using **File > New > Project** or open an existing Python project in Visual Studio. Choose **Tools > Rhino: Configure Project IntelliSense**, then reload the project if Visual Studio asks.
 5. Open a `.py` file and press **Shift+F2** to run it in Rhino.
 
 A minimal RhinoCommon example:
@@ -63,7 +63,7 @@ scriptcontext.doc.Views.Redraw()
 print("Added point:", point)
 ```
 
-Execution messages and Python output appear under **View > Output**; select **Rhino VS Bridge** in the v0.4.0 release (or **Rhino Dock** in updated versions) in the output-source list. Python runtime failures also appear in **View > Error List**. Double-click a Rhino Dock error to open its file at the reported line. To request cancellation, choose **Tools > Rhino: Cancel Running Script**.
+Execution messages and Python output appear under **View > Output**; select **Rhino Dock** in the output-source list. Python runtime failures also appear in **View > Error List**. Double-click a Rhino Dock error to open its file at the reported line. To request cancellation, choose **Tools > Rhino: Cancel Running Script**.
 
 During verified first-run testing, IntelliSense became available after **Rhino: Configure Project IntelliSense** and the first Shift+F2 execution. Running a script is not intended to be a technical prerequisite for IntelliSense; if completions do not appear immediately, follow the troubleshooting steps below.
 
@@ -76,7 +76,7 @@ During verified first-run testing, IntelliSense became available after **Rhino: 
 - Rhino's ScriptServer running in the Rhino instance that should execute the script.
 - A Visual Studio Python project for project-level IntelliSense configuration.
 
-Visual Studio 2022 support is an architectural target but is not claimed as manually verified for v0.4.0.
+Visual Studio 2022 support is an architectural target but has not been manually verified for the current release.
 
 ## Troubleshooting
 
