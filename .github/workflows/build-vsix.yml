@@ -34,6 +34,19 @@ jobs:
       - name: Restore and build VSIX
         run: dotnet build RhinoVSBridge.sln --configuration Release
 
+      - name: Verify bundled Rhino Dock project template
+        shell: pwsh
+        run: |
+          $vsixPath = "src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix"
+          Add-Type -AssemblyName System.IO.Compression
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $vsixPath))
+          try {
+            $required = "ProjectTemplates/Python/RhinoDockPythonProject.zip"
+            if (-not ($zip.Entries | Where-Object { $_.FullName -eq $required })) {
+              throw "Missing Rhino Dock project template in VSIX: $required"
+            }
+          } finally { $zip.Dispose() }
+
       - name: Run product C# tests
         run: dotnet run --project tests/RhinoVSBridge.CoreTests/RhinoVSBridge.CoreTests.csproj --configuration Release --no-build
 
@@ -44,11 +57,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
-          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.4.1.vsix
+          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.5.0.vsix
 
       - name: Publish VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RhinoDock-v0.4.1-${{ github.sha }}
-          path: artifacts/RhinoDock-v0.4.1.vsix
+          name: RhinoDock-v0.5.0-${{ github.sha }}
+          path: artifacts/RhinoDock-v0.5.0.vsix
           if-no-files-found: error
