@@ -10,13 +10,13 @@ Rhino Dock connects **full Microsoft Visual Studio 2026** to Rhino 8 for editing
 
 > **Rename notice:** Rhino Dock was formerly known as **Rhino VS Bridge**. The published v0.4.0 installer (`RhinoVSBridge-v0.4.0.vsix`) retains its original name and UI labels. The next release will use the new branding.
 
-The latest published stable release is **v0.4.0**. **v0.5.1 is under development** and is not yet released. Breakpoint debugging and `debugpy` integration are not supported.
+The latest published stable release is **v0.4.0**. **v0.5.2 is under development** and is not yet released. Breakpoint debugging and `debugpy` integration are not supported.
 
 ## Background and motivation
 
 Inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-chen/RhinoPythonForVS), Rhino Dock revisits the idea of developing and running Rhino Python scripts from Visual Studio. Rhino 8's CPython 3 support and RhinoCode scripting infrastructure make a new integration possible: an independent implementation for Visual Studio 2026 that uses RhinoCode instead of the legacy IronPython 2.7 and CodeListener workflow.
 
-## Under development (v0.5.1)
+## Under development (v0.5.2)
 
 - Mirror Python 3 `print()` output to both **Output > Rhino Dock** in Visual Studio and Rhino's command history.
 - Add a **Rhino Dock Python Project** template to **File > New > Project**. It creates a regular PTVS Python project with a simple `main.py` example. Use **Tools > Rhino: Configure Project IntelliSense** once after creation; the template does not yet automate machine-specific search paths.
