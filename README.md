@@ -10,11 +10,18 @@ Rhino Dock connects **full Microsoft Visual Studio 2026** to Rhino 8 for editing
 
 > **Rename notice:** Rhino Dock was formerly known as **Rhino VS Bridge**. Historical v0.4.0 installers retain their original name and UI labels.
 
-The latest stable release is **[v0.5.5](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.5.5)**. Rhino Dock is also available in the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=jkuhnen.RhinoDock). Breakpoint debugging and `debugpy` integration are not supported.
+The latest stable release is **[v0.5.5](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.5.5)**. Rhino Dock is also available in the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=jkuhnen.RhinoDock). **v0.6.0 is under development** and adds automatic IntelliSense setup when creating a Rhino Dock Python Project. Breakpoint debugging and `debugpy` integration are not supported.
 
 ## Background and motivation
 
 Inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-chen/RhinoPythonForVS), Rhino Dock revisits the idea of developing and running Rhino Python scripts from Visual Studio. Rhino 8's CPython 3 support and RhinoCode scripting infrastructure make a new integration possible: an independent implementation for Visual Studio 2026 that uses RhinoCode instead of the legacy IronPython 2.7 and CodeListener workflow.
+
+## In development for v0.6.0
+
+- **Automatic IntelliSense for new Rhino Dock projects:** When you create a project from the Rhino Dock Python Project template, the template wizard discovers locally generated Rhino 8 CPython stubs and configures the `.pyproj` search paths **before the project is loaded**.
+- Automatically generates the project-local `scriptcontext.pyi` typing shim. No manual IntelliSense menu action or project reload is needed when Rhino's stubs already exist.
+- For existing Python projects, or when Rhino's stubs have not yet been generated, the manual **Tools > Rhino: Configure Project IntelliSense** command remains available.
+- Support for standalone `.py` files without a project remains a separate future enhancement.
 
 ## What's new in v0.5.4
 
@@ -48,7 +55,7 @@ No Visual Studio extension-development experience is required.
 1. Install **Visual Studio 2026** with the **Python development** workload, and install **Rhino 8**.
 2. Install from the Visual Studio Marketplace, or download `RhinoDock-v0.5.5.vsix`, close Visual Studio, run the VSIX installer, and restart Visual Studio.
 3. Start Rhino, open Rhino's **ScriptEditor** once, then run `StartScriptServer` in Rhino's command line. Keep Rhino open.
-4. Create a **Rhino Dock Python Project** using **File > New > Project** or open an existing Python project in Visual Studio. Choose **Tools > Rhino: Configure Project IntelliSense**, then reload the project if Visual Studio asks.
+4. Create a **Rhino Dock Python Project** using **File > New > Project**. In v0.6.0 and later, IntelliSense paths are configured automatically if Rhino's stubs have already been generated. For older releases or existing Python projects, choose **Tools > Rhino: Configure Project IntelliSense** and reload the project if Visual Studio asks.
 5. Open a `.py` file and press **Shift+F2** to run it in Rhino.
 
 A minimal RhinoCommon example:
