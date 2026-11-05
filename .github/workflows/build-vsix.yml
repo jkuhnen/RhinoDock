@@ -96,6 +96,16 @@ jobs:
             }
             $templateReader = [System.IO.StreamReader]::new($templateEntry.Open())
             try { [xml]$template = $templateReader.ReadToEnd() } finally { $templateReader.Dispose() }
+            # A broken wizard registration would make project creation fail at runtime.
+            $wizardAssembly = $template.VSTemplate.WizardExtension.Assembly
+            $wizardClass = $template.VSTemplate.WizardExtension.FullClassName
+            if ($wizardAssembly -ne "RhinoVSBridge, Version=0.6.0.0, Culture=neutral, PublicKeyToken=b9cd0dfbf46267fd" -or
+                $wizardClass -ne "RhinoVSBridge.RhinoDockProjectWizard") {
+              throw "Rhino Dock template wizard registration is missing or incorrect"
+            }
+            if (-not $zip.GetEntry("RhinoVSBridge.dll")) {
+              throw "Template wizard assembly is missing from VSIX"
+            }
             $projectFile = $template.VSTemplate.TemplateContent.Project.File
             $projectEntry = $zip.GetEntry(("ProjectTemplates/" + $folderNode.InnerText.TrimEnd([char]'/', [char]92) + "/" + $projectFile).Replace([char]92, '/'))
             if (-not $projectEntry) { throw "Template project source missing: $projectFile" }
@@ -108,6 +118,44 @@ jobs:
                 $projectText -notmatch 'Microsoft.PythonTools.targets' -or
                 $projectText -match 'rhino-vs-bridge|[A-Z]:\\\\Users\\\\') {
               throw "Generated Python project differs from supported VS 2026 template or contains machine-specific search paths"
+            }
+            if (-not $projectText.Contains('$rhinodocksearchpaths and has transparency
+            # (avoid blurry icons and a solid white rectangle in dark mode).
+            Add-Type -AssemblyName System.Drawing
+            $imageStream = $zip.GetEntry("Resources/RhinoDockIcon.png").Open()
+            $imageBuffer = [System.IO.MemoryStream]::new()
+            try {
+              $imageStream.CopyTo($imageBuffer)
+              $imageBuffer.Position = 0
+              $icon = [System.Drawing.Bitmap]::new($imageBuffer)
+              try {
+                if ($icon.Width -lt 256 -or $icon.Height -lt 256 -or $icon.GetPixel(0,0).A -ne 0) {
+                  throw "Rhino Dock icon must be >=256px and transparent"
+                }
+              } finally { $icon.Dispose() }
+            } finally { $imageBuffer.Dispose(); $imageStream.Dispose() }
+          } finally { $zip.Dispose() }
+
+      - name: Run product C# tests
+        run: dotnet run --project tests/RhinoVSBridge.CoreTests/RhinoVSBridge.CoreTests.csproj --configuration Release --no-build
+
+      - name: Run portable contract tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Package Rhino Dock VSIX
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.6.0.vsix
+
+      - name: Publish VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RhinoDock-v0.6.0-${{ github.sha }}
+          path: artifacts/RhinoDock-v0.6.0.vsix
+          if-no-files-found: error
+)) {
+              throw "Template project must contain the wizard-expanded IntelliSense paths"
             }
             # Verify the installed icon is at least 256px and has transparency
             # (avoid blurry icons and a solid white rectangle in dark mode).
