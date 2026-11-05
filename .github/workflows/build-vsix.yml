@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - "feature/**"
   pull_request:
   workflow_dispatch:
 
@@ -75,6 +74,41 @@ jobs:
                 $indexText -notmatch "RhinoDockPython.vstemplate") {
               throw "VSSDK template index does not list Rhino Dock Python Project"
             }
+            # Verify that every manifest-referenced template file can actually
+            # be found at its declared path inside the installed extension.
+            [xml]$index = $indexText
+            $indexNs = [System.Xml.XmlNamespaceManager]::new($index.NameTable)
+            $indexNs.AddNamespace("m", "http://schemas.microsoft.com/developer/vstemplatemanifest/2015")
+            $folderNode = $index.SelectSingleNode("//m:VSTemplateContainer/m:RelativePathOnDisk", $indexNs)
+            $fileNode = $index.SelectSingleNode("//m:VSTemplateContainer/m:TemplateFileName", $indexNs)
+            if (-not $folderNode -or -not $fileNode) { throw "Template index has no usable file location" }
+            $declaredTemplate = ($folderNode.InnerText.TrimEnd("/","\\") + "/" + $fileNode.InnerText).Replace("\\","/")
+            $templateEntry = $zip.GetEntry($declaredTemplate)
+            if (-not $templateEntry) {
+              throw "VSTemplateManifest points to a missing file: $declaredTemplate"
+            }
+            $templateReader = [System.IO.StreamReader]::new($templateEntry.Open())
+            try { [xml]$template = $templateReader.ReadToEnd() } finally { $templateReader.Dispose() }
+            $projectFile = $template.VSTemplate.TemplateContent.Project.File
+            $projectEntry = $zip.GetEntry(($folderNode.InnerText.TrimEnd("/","\\") + "/" + $projectFile).Replace("\\","/"))
+            if (-not $projectEntry) { throw "Template project source missing: $projectFile" }
+            $projReader = [System.IO.StreamReader]::new($projectEntry.Open())
+            try { $projectText = $projReader.ReadToEnd() } finally { $projReader.Dispose() }
+            if ($projectText -notmatch "888888a0-9f3d-457c-b088-3a5042f75d52") {
+              throw "Python project is missing the PTVS project-type GUID"
+            }
+            # Verify the installed icon is at least 256px and has transparency
+            # (avoid blurry icons and a solid white rectangle in dark mode).
+            Add-Type -AssemblyName System.Drawing
+            $imageStream = $zip.GetEntry("Resources/RhinoDockIcon.png").Open()
+            try {
+              $icon = [System.Drawing.Bitmap]::new($imageStream)
+              try {
+                if ($icon.Width -lt 256 -or $icon.Height -lt 256 -or $icon.GetPixel(0,0).A -ne 0) {
+                  throw "Rhino Dock icon must be >=256px and transparent"
+                }
+              } finally { $icon.Dispose() }
+            } finally { $imageStream.Dispose() }
           } finally { $zip.Dispose() }
 
       - name: Run product C# tests
@@ -87,11 +121,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
-          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.5.1.vsix
+          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.5.2.vsix
 
       - name: Publish VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RhinoDock-v0.5.1-${{ github.sha }}
-          path: artifacts/RhinoDock-v0.5.1.vsix
+          name: RhinoDock-v0.5.2-${{ github.sha }}
+          path: artifacts/RhinoDock-v0.5.2.vsix
           if-no-files-found: error
