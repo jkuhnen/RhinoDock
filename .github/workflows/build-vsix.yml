@@ -41,8 +41,9 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression
           $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $vsixPath))
           try {
+            $zip.Entries | ForEach-Object { Write-Host "VSIX entry: $($_.FullName)" }
             $required = "ProjectTemplates/Python/RhinoDockPythonProject.zip"
-            if (-not ($zip.Entries | Where-Object { $_.FullName -eq $required })) {
+            if (-not ($zip.Entries | Where-Object { $_.FullName.Replace("\\", "/") -eq $required })) {
               throw "Missing Rhino Dock project template in VSIX: $required"
             }
           } finally { $zip.Dispose() }
