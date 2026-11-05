@@ -6,9 +6,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to validate without publishing
+        description: Existing release tag to validate or publish
         required: true
-        default: v0.5.5
+        default: v0.6.0
+        type: string
+      publish:
+        description: "Publish this existing release to Marketplace (explicit opt-in; may replace same version)"
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -26,7 +32,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -65,17 +71,40 @@ jobs:
           Write-Host "Validated $name; SHA256 $((Get-FileHash $path -Algorithm SHA256).Hash)"
 
       - name: Publish with Trusted Publishing (OIDC)
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || inputs.publish == true
         shell: pwsh
         run: |
+          # Work around VSIX Publisher VsixPub0047: its current -oidc exchange
+          # omits an API version. Use the documented Marketplace exchange API
+          # and pass the resulting 15-minute credential to the standard publisher.
+          # No persistent PAT and no tokens are committed or stored as secrets.
+          if (-not $env:ACTIONS_ID_TOKEN_REQUEST_URL -or -not $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN) {
+            throw 'GitHub OIDC is unavailable: job must have id-token: write.'
+          }
+          $url = "$($env:ACTIONS_ID_TOKEN_REQUEST_URL)&audience=marketplace.visualstudio.com"
+          $githubToken = Invoke-RestMethod -Uri $url -Method Get -Headers @{
+            Authorization = "Bearer $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+          } -ErrorAction Stop
+          if (-not $githubToken.value) { throw 'GitHub did not issue a federated identity token.' }
+
+          # This matches the Microsoft vscode-vsce 4.x Trusted Publishing API.
+          $session = Invoke-RestMethod -Uri 'https://marketplace.visualstudio.com/_apis/gallery/token?api-version=7.2-preview.1' -Method Post -Headers @{
+            Authorization = "FederatedToken $($githubToken.value)"
+            Accept = 'application/json'
+          } -ContentType 'application/json' -Body '{"publisherName":"jkuhnen"}' -ErrorAction Stop
+          if (-not $session.credential) { throw 'Marketplace did not return a temporary session credential.' }
+          # Immediately mask the credential before calling any publishing tool.
+          Write-Output "::add-mask::$($session.credential)"
+          Write-Host 'Marketplace OIDC exchange succeeded.'
+
           $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
           $vsRoot = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
           if (-not $vsRoot) { throw 'Visual Studio not installed on runner' }
           $exe = Join-Path $vsRoot 'VSSDK/VisualStudioIntegration/Tools/Bin/VsixPublisher.exe'
           if (-not (Test-Path $exe)) { throw "VsixPublisher.exe missing at $exe" }
-          & $exe publish -payload $env:RHINO_DOCK_VSIX -publishManifest "$env:GITHUB_WORKSPACE/marketplace/publishManifest.json" -oidc
+          & $exe publish -payload $env:RHINO_DOCK_VSIX -publishManifest "$env:GITHUB_WORKSPACE/marketplace/publishManifest.json" -personalAccessToken $session.credential
           if ($LASTEXITCODE -ne 0) { throw "Marketplace publication failed: $LASTEXITCODE" }
 
       - name: Dry-run complete
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish != true
         run: echo "Validation succeeded; Marketplace not modified."
