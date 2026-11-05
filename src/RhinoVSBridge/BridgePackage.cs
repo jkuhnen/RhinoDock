@@ -15,7 +15,7 @@ using Task = System.Threading.Tasks.Task;
 namespace RhinoVSBridge
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("Rhino Dock", "Rhino 8 CPython execution for Visual Studio", "0.4.1")]
+    [InstalledProductRegistration("Rhino Dock", "Rhino 8 CPython execution for Visual Studio", "0.5.0")]
     [ProvideMenuResource("RhinoVSBridge.CTMENU", 1)]
     [Guid(PackageGuid)]
     public sealed class BridgePackage : AsyncPackage
