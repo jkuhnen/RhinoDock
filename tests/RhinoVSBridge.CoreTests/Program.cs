@@ -80,6 +80,7 @@ namespace RhinoVSBridge
                 ("Target selection never falls back from a disconnected explicit instance", TestTargetSelection),
                 ("Search path reconciliation removes only obsolete Rhino paths", TestPathReconciliation),
                 ("Python project update creates backup and preserves custom paths", TestProjectUpdate),
+                ("New project typing shim is created without editing the project", TestProjectTemplateTypingShim),
                 ("Script execution supports an infinite transport wait", TestLongRunningTransport),
                 ("CPython runner preserves source paths and supports streaming cancellation", TestRunnerContract),
                 ("Runner startup acknowledgment completes successfully", TestSuccessfulStartup),
@@ -343,6 +344,32 @@ namespace RhinoVSBridge
             }
             return Task.CompletedTask;
         }
+        private static Task TestProjectTemplateTypingShim()
+        {
+            var folder = Path.Combine(Path.GetTempPath(), "RhinoDock-template-test-" + Guid.NewGuid());
+            Directory.CreateDirectory(folder);
+            try
+            {
+                var project = Path.Combine(folder, "NewProject.pyproj");
+                var original = "<Project><PropertyGroup><SearchPath>.rhino-dock\\typings</SearchPath></PropertyGroup></Project>";
+                File.WriteAllText(project, original);
+                var first = IntelliSensePaths.EnsureCompatibilityStubs(project);
+                True(first.Written, "The project wizard must generate scriptcontext.pyi.");
+                True(File.Exists(first.Path), "The scriptcontext shim was not generated.");
+                Contains("doc: Rhino.RhinoDoc", File.ReadAllText(first.Path));
+                var second = IntelliSensePaths.EnsureCompatibilityStubs(project);
+                True(!second.Written, "Creating the shim twice must be idempotent.");
+                Equal(original, File.ReadAllText(project));
+                True(!File.Exists(project + ".rhino-dock.bak"),
+                    "Generating a project should not require rewriting or backing up its .pyproj.");
+            }
+            finally
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+            return Task.CompletedTask;
+        }
+
         private static async Task TestLongRunningTransport()
         {
             var executable = Environment.ProcessPath ?? throw new Exception("Test executable path unavailable.");

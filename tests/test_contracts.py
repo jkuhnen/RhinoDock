@@ -7,6 +7,30 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class IntegrationContractTests(unittest.TestCase):
+    def test_new_project_auto_configures_rhino_intellisense(self):
+        template = ROOT / "src/RhinoVSBridge/Templates/RhinoDockPython"
+        project = (template / "RhinoDockPython.pyproj").read_text(encoding="utf-8")
+        self.assertIn("<SearchPath>$rhinodocksearchpaths$</SearchPath>", project)
+        vstemplate = ET.parse(template / "RhinoDockPython.vstemplate")
+        ns = {"v": "http://schemas.microsoft.com/developer/vstemplate/2005"}
+        assembly = vstemplate.findtext("v:WizardExtension/v:Assembly", namespaces=ns)
+        wizard_type = vstemplate.findtext("v:WizardExtension/v:FullClassName", namespaces=ns)
+        self.assertEqual(
+            "RhinoVSBridge, Version=0.6.0.0, Culture=neutral, PublicKeyToken=b9cd0dfbf46267fd",
+            assembly,
+        )
+        self.assertEqual("RhinoVSBridge.RhinoDockProjectWizard", wizard_type)
+        source = (ROOT / "src/RhinoVSBridge/RhinoDockProjectWizard.cs").read_text(encoding="utf-8")
+        self.assertIn("IWizard", source)
+        self.assertIn('replacementsDictionary["$rhinodocksearchpaths$"]', source)
+        self.assertIn("IntelliSensePaths.Discover()", source)
+        self.assertIn("IntelliSensePaths.EnsureCompatibilityStubs(project.FullName)", source)
+        self.assertIn("SecurityElement.Escape", source)
+        csproj = (ROOT / "src/RhinoVSBridge/RhinoVSBridge.csproj").read_text(encoding="utf-8")
+        self.assertIn("<SignAssembly>true</SignAssembly>", csproj)
+        self.assertIn("<AssemblyVersion>0.6.0.0</AssemblyVersion>", csproj)
+        self.assertTrue((ROOT / "src/RhinoVSBridge/rhino-dock.snk").is_file())
+
     def test_registered_commands_have_matching_vsct_ids(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"
         tree = ET.parse(vsct)
@@ -104,14 +128,14 @@ class IntegrationContractTests(unittest.TestCase):
             ROOT / "src/RhinoVSBridge/source.extension.vsixmanifest").getroot()
         identity = next(node for node in manifest.iter()
                         if node.tag.endswith("Identity"))
-        self.assertEqual("0.5.5", identity.attrib["Version"])
+        self.assertEqual("0.6.0", identity.attrib["Version"])
         self.assertEqual("Johannes Kuhnen", identity.attrib["Publisher"])
         self.assertEqual("RhinoVSBridge.08e0a5d2-a57b-48e5-8bf6-08f4efb3cf6b", identity.attrib["Id"])
         display = next(node for node in manifest.iter()
                        if node.tag.endswith("DisplayName"))
         self.assertEqual("Rhino Dock", display.text)
         package = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
-        self.assertIn('"0.5.5"', package)
+        self.assertIn('"0.6.0"', package)
 
     def test_package_requests_the_compiled_command_table_resource(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"

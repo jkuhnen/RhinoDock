@@ -5,7 +5,7 @@
     <ProjectGuid>$guid1$</ProjectGuid>
     <ProjectHome>.</ProjectHome>
     <StartupFile>main.py</StartupFile>
-    <SearchPath></SearchPath>
+    <SearchPath>$rhinodocksearchpaths$</SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
     <Name>$safeprojectname$</Name>

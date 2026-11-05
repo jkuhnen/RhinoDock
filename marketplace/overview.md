@@ -7,7 +7,7 @@ Rhino Dock connects Microsoft Visual Studio 2026 to Rhino 8's CPython 3 environm
 ## Features
 
 - Run the active Python script in Rhino with **Shift+F2**.
-- RhinoCommon, rhinoscriptsyntax and scriptcontext IntelliSense.
+- RhinoCommon, rhinoscriptsyntax and scriptcontext IntelliSense, **automatically configured for new Rhino Dock Python Projects**.
 - Dedicated **Rhino Dock Python Project** template.
 - Python print output in both Visual Studio and Rhino.
 - Python traceback navigation to the source file and line.
@@ -18,8 +18,8 @@ Rhino Dock connects Microsoft Visual Studio 2026 to Rhino 8's CPython 3 environm
 1. Install Visual Studio 2026 with the Python development workload and Rhino 8.
 2. Install Rhino Dock.
 3. In Rhino, open ScriptEditor once and run `StartScriptServer`.
-4. Create a Rhino Dock Python Project or open a Python project.
-5. Use **Tools > Rhino: Configure Project IntelliSense**.
+4. Create a Rhino Dock Python Project; Rhino 8 IntelliSense is configured automatically if ScriptEditor has generated the local stubs.
+5. For existing Python projects, use **Tools > Rhino: Configure Project IntelliSense**.
 6. Press **Shift+F2** in a saved Python script.
 
 ## Notes
