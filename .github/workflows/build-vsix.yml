@@ -34,6 +34,9 @@ jobs:
       - name: Restore and build VSIX
         run: dotnet build RhinoVSBridge.sln --configuration Release
 
+      - name: Normalize VSSDK project-template paths
+        run: python tools/normalize_vsix_template_paths.py src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix
+
       - name: Verify bundled Rhino Dock project template
         shell: pwsh
         run: |
@@ -83,7 +86,10 @@ jobs:
             $folderNode = $index.SelectSingleNode("//m:VSTemplateContainer/m:RelativePathOnDisk", $indexNs)
             $fileNode = $index.SelectSingleNode("//m:VSTemplateContainer/m:TemplateFileName", $indexNs)
             if (-not $folderNode -or -not $fileNode) { throw "Template index has no usable file location" }
-            $declaredTemplate = ($folderNode.InnerText.TrimEnd([char]'/', [char]92) + "/" + $fileNode.InnerText).Replace([char]92, '/')
+            if ($folderNode.InnerText -match '^ProjectTemplates[/\\\\]') {
+              throw "RelativePathOnDisk must be relative to the ProjectTemplates asset root"
+            }
+            $declaredTemplate = ("ProjectTemplates/" + $folderNode.InnerText.Trim([char]'/', [char]92) + "/" + $fileNode.InnerText).Replace([char]92, '/')
             $templateEntry = $zip.GetEntry($declaredTemplate)
             if (-not $templateEntry) {
               throw "VSTemplateManifest points to a missing file: $declaredTemplate"
@@ -91,7 +97,7 @@ jobs:
             $templateReader = [System.IO.StreamReader]::new($templateEntry.Open())
             try { [xml]$template = $templateReader.ReadToEnd() } finally { $templateReader.Dispose() }
             $projectFile = $template.VSTemplate.TemplateContent.Project.File
-            $projectEntry = $zip.GetEntry(($folderNode.InnerText.TrimEnd([char]'/', [char]92) + "/" + $projectFile).Replace([char]92, '/'))
+            $projectEntry = $zip.GetEntry(("ProjectTemplates/" + $folderNode.InnerText.TrimEnd([char]'/', [char]92) + "/" + $projectFile).Replace([char]92, '/'))
             if (-not $projectEntry) { throw "Template project source missing: $projectFile" }
             $projReader = [System.IO.StreamReader]::new($projectEntry.Open())
             try { $projectText = $projReader.ReadToEnd() } finally { $projReader.Dispose() }
