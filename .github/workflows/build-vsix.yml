@@ -82,7 +82,7 @@ jobs:
             $folderNode = $index.SelectSingleNode("//m:VSTemplateContainer/m:RelativePathOnDisk", $indexNs)
             $fileNode = $index.SelectSingleNode("//m:VSTemplateContainer/m:TemplateFileName", $indexNs)
             if (-not $folderNode -or -not $fileNode) { throw "Template index has no usable file location" }
-            $declaredTemplate = ($folderNode.InnerText.TrimEnd("/","\\") + "/" + $fileNode.InnerText).Replace("\\","/")
+            $declaredTemplate = ($folderNode.InnerText.TrimEnd([char]'/', [char]92) + "/" + $fileNode.InnerText).Replace("\\","/")
             $templateEntry = $zip.GetEntry($declaredTemplate)
             if (-not $templateEntry) {
               throw "VSTemplateManifest points to a missing file: $declaredTemplate"
@@ -90,7 +90,7 @@ jobs:
             $templateReader = [System.IO.StreamReader]::new($templateEntry.Open())
             try { [xml]$template = $templateReader.ReadToEnd() } finally { $templateReader.Dispose() }
             $projectFile = $template.VSTemplate.TemplateContent.Project.File
-            $projectEntry = $zip.GetEntry(($folderNode.InnerText.TrimEnd("/","\\") + "/" + $projectFile).Replace("\\","/"))
+            $projectEntry = $zip.GetEntry(($folderNode.InnerText.TrimEnd([char]'/', [char]92) + "/" + $projectFile).Replace("\\","/"))
             if (-not $projectEntry) { throw "Template project source missing: $projectFile" }
             $projReader = [System.IO.StreamReader]::new($projectEntry.Open())
             try { $projectText = $projReader.ReadToEnd() } finally { $projReader.Dispose() }
