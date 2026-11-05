@@ -1,20 +1,19 @@
-<?xml version="1.0" encoding="utf-8"?>
-<VSTemplate Version="3.0.0" Type="Project" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005">
+<VSTemplate Version="3.0.0" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005" Type="Project">
   <TemplateData>
     <Name>Rhino Dock Python Project</Name>
-    <Description>Python 3 scripting for Rhino 8 from Visual Studio using Rhino Dock.</Description>
+    <Description>Python 3 scripts for Rhino 8 using Rhino Dock in Visual Studio.</Description>
     <ProjectType>Python</ProjectType>
-    <LanguageTag>python</LanguageTag>
-    <PlatformTag>windows</PlatformTag>
-    <ProjectTypeTag>desktop</ProjectTypeTag>
-    <SortOrder>100</SortOrder>
+    <ProjectSubType></ProjectSubType>
+    <SortOrder>1000</SortOrder>
     <CreateNewFolder>true</CreateNewFolder>
     <DefaultName>RhinoDockProject</DefaultName>
     <ProvideDefaultName>true</ProvideDefaultName>
+    <LocationField>Enabled</LocationField>
+    <EnableLocationBrowseButton>true</EnableLocationBrowseButton>
   </TemplateData>
   <TemplateContent>
-    <Project File="RhinoDockPython.pyproj" TargetFileName="$safeprojectname$.pyproj" ReplaceParameters="true">
-      <ProjectItem ReplaceParameters="false" TargetFileName="main.py">main.py</ProjectItem>
+    <Project TargetFileName="RhinoDockPython.pyproj" File="RhinoDockPython.pyproj" ReplaceParameters="true">
+      <ProjectItem ReplaceParameters="true" TargetFileName="main.py">main.py</ProjectItem>
     </Project>
   </TemplateContent>
 </VSTemplate>
