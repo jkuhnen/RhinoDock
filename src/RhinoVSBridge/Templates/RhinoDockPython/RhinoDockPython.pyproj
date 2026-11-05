@@ -5,10 +5,16 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{$guid1$}</ProjectGuid>
     <ProjectHome>.</ProjectHome>
+    <SearchPath />
     <StartupFile>main.py</StartupFile>
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
     <Name>$safeprojectname$</Name>
+    <ProjectTypeGuids>{888888a0-9f3d-457c-b088-3a5042f75d52}</ProjectTypeGuids>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+  </PropertyGroup>
+  <PropertyGroup>
+    <VisualStudioVersion Condition=" '$(VisualStudioVersion)' == '' ">10.0</VisualStudioVersion>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="main.py" />
