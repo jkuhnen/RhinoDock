@@ -16,6 +16,7 @@ namespace RhinoVSBridge
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration("Rhino Dock", "Rhino 8 CPython execution for Visual Studio", "0.6.0")]
+    [ProvideBindingPath]
     [ProvideMenuResource("RhinoVSBridge.CTMENU", 1)]
     [Guid(PackageGuid)]
     public sealed class BridgePackage : AsyncPackage
