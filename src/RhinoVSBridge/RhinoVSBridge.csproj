@@ -28,7 +28,7 @@
     </Content>
     <Content Include="$(IntermediateOutputPath)RhinoDockPythonProject.zip">
       <IncludeInVSIX>true</IncludeInVSIX>
-      <VSIXSubPath>ProjectTemplates/Python</VSIXSubPath>
+      <VSIXSubPath>Python</VSIXSubPath>
       <Visible>false</Visible>
     </Content>
   </ItemGroup>
