@@ -7,8 +7,8 @@ root.  A repeated ProjectTemplates/ prefix points outside the actual files.
 
 Usage: python tools/normalize_vsix_template_paths.py <path-to-vsix>
 """
+import io
 import os
-import re
 import sys
 import tempfile
 import zipfile
@@ -20,7 +20,7 @@ MAN_NS = "{http://schemas.microsoft.com/developer/vstemplatemanifest/2015}"
 
 
 def normalize(vsix_path: Path) -> bool:
-    with zipfile.ZipFile(vsix_path) as z:
+    with zipfile.ZipFile(io.BytesIO(vsix_path.read_bytes())) as z:
         names = set(z.namelist())
         v = ET.fromstring(z.read("extension.vsixmanifest"))
         assets = [a.attrib["Path"].strip("/") for a in v.findall(
