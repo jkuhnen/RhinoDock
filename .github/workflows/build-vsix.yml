@@ -34,6 +34,98 @@ jobs:
       - name: Restore and build VSIX
         run: dotnet build RhinoVSBridge.sln --configuration Release
 
+      - name: Normalize VSSDK project-template paths
+        run: python tools/normalize_vsix_template_paths.py src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix
+
+      - name: Verify bundled Rhino Dock project template
+        shell: pwsh
+        run: |
+          $vsixPath = "src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix"
+          Add-Type -AssemblyName System.IO.Compression
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $vsixPath))
+          try {
+            $zip.Entries | ForEach-Object { Write-Host "VSIX entry: $($_.FullName)" }
+            # VSSDK expands the project template ZIP and indexes the .vstemplate.
+            $requiredEntries = @(
+              "Resources/RhinoDockIcon.png",
+              "ProjectTemplates/templateManifest0.noloc.vstman",
+              "ProjectTemplates/Python/RhinoDockPythonProject/RhinoDockPython.vstemplate",
+              "ProjectTemplates/Python/RhinoDockPythonProject/RhinoDockPython.pyproj",
+              "ProjectTemplates/Python/RhinoDockPythonProject/main.py"
+            )
+            foreach ($required in $requiredEntries) {
+              if (-not ($zip.Entries | Where-Object { $_.FullName.Replace("\\", "/") -eq $required })) {
+                throw "Missing Rhino Dock project template entry in VSIX: $required"
+              }
+            }
+            # Validate the actual VSIX asset declaration, not merely the presence
+            # of the extracted template files. An obsolete .zip path was previously
+            # accepted by build but hidden the template from Visual Studio.
+            $manifestEntry = $zip.GetEntry("extension.vsixmanifest")
+            if (-not $manifestEntry) { throw "Missing extension.vsixmanifest" }
+            $reader = [System.IO.StreamReader]::new($manifestEntry.Open())
+            try { [xml]$manifest = $reader.ReadToEnd() } finally { $reader.Dispose() }
+            $templateAsset = $manifest.PackageManifest.Assets.Asset | Where-Object {
+              $_.Type -eq "Microsoft.VisualStudio.ProjectTemplate"
+            }
+            if (-not $templateAsset -or $templateAsset.Path -ne "ProjectTemplates") {
+              throw "The ProjectTemplate asset must reference the embedded ProjectTemplates directory"
+            }
+            $templateIndexEntry = $zip.GetEntry("ProjectTemplates/templateManifest0.noloc.vstman")
+            $indexReader = [System.IO.StreamReader]::new($templateIndexEntry.Open())
+            try { $indexText = $indexReader.ReadToEnd() } finally { $indexReader.Dispose() }
+            if ($indexText -notmatch "Rhino Dock Python Project" -or
+                $indexText -notmatch "RhinoDockPython.vstemplate") {
+              throw "VSSDK template index does not list Rhino Dock Python Project"
+            }
+            # Verify that every manifest-referenced template file can actually
+            # be found at its declared path inside the installed extension.
+            [xml]$index = $indexText
+            $indexNs = [System.Xml.XmlNamespaceManager]::new($index.NameTable)
+            $indexNs.AddNamespace("m", "http://schemas.microsoft.com/developer/vstemplatemanifest/2015")
+            $folderNode = $index.SelectSingleNode("//m:VSTemplateContainer/m:RelativePathOnDisk", $indexNs)
+            $fileNode = $index.SelectSingleNode("//m:VSTemplateContainer/m:TemplateFileName", $indexNs)
+            if (-not $folderNode -or -not $fileNode) { throw "Template index has no usable file location" }
+            if ($folderNode.InnerText -match '^ProjectTemplates[/\\\\]') {
+              throw "RelativePathOnDisk must be relative to the ProjectTemplates asset root"
+            }
+            $declaredTemplate = ("ProjectTemplates/" + $folderNode.InnerText.Trim([char]'/', [char]92) + "/" + $fileNode.InnerText).Replace([char]92, '/')
+            $templateEntry = $zip.GetEntry($declaredTemplate)
+            if (-not $templateEntry) {
+              throw "VSTemplateManifest points to a missing file: $declaredTemplate"
+            }
+            $templateReader = [System.IO.StreamReader]::new($templateEntry.Open())
+            try { [xml]$template = $templateReader.ReadToEnd() } finally { $templateReader.Dispose() }
+            $projectFile = $template.VSTemplate.TemplateContent.Project.File
+            $projectEntry = $zip.GetEntry(("ProjectTemplates/" + $folderNode.InnerText.TrimEnd([char]'/', [char]92) + "/" + $projectFile).Replace([char]92, '/'))
+            if (-not $projectEntry) { throw "Template project source missing: $projectFile" }
+            $projReader = [System.IO.StreamReader]::new($projectEntry.Open())
+            try { $projectText = $projReader.ReadToEnd() } finally { $projReader.Dispose() }
+            # The working Visual Studio 2026 Python template relies on the
+            # Python Tools targets import and an unbraced $guid1$ placeholder.
+            # Do not require a hard-coded ProjectTypeGuids property here.
+            if ($projectText -notmatch [regex]::Escape('<ProjectGuid>$guid1$</ProjectGuid>') -or
+                $projectText -notmatch 'Microsoft.PythonTools.targets' -or
+                $projectText -match 'rhino-vs-bridge|[A-Z]:\\\\Users\\\\') {
+              throw "Generated Python project differs from supported VS 2026 template or contains machine-specific search paths"
+            }
+            # Verify the installed icon is at least 256px and has transparency
+            # (avoid blurry icons and a solid white rectangle in dark mode).
+            Add-Type -AssemblyName System.Drawing
+            $imageStream = $zip.GetEntry("Resources/RhinoDockIcon.png").Open()
+            $imageBuffer = [System.IO.MemoryStream]::new()
+            try {
+              $imageStream.CopyTo($imageBuffer)
+              $imageBuffer.Position = 0
+              $icon = [System.Drawing.Bitmap]::new($imageBuffer)
+              try {
+                if ($icon.Width -lt 256 -or $icon.Height -lt 256 -or $icon.GetPixel(0,0).A -ne 0) {
+                  throw "Rhino Dock icon must be >=256px and transparent"
+                }
+              } finally { $icon.Dispose() }
+            } finally { $imageBuffer.Dispose(); $imageStream.Dispose() }
+          } finally { $zip.Dispose() }
+
       - name: Run product C# tests
         run: dotnet run --project tests/RhinoVSBridge.CoreTests/RhinoVSBridge.CoreTests.csproj --configuration Release --no-build
 
@@ -44,11 +136,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
-          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.4.1.vsix
+          Copy-Item src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.vsix artifacts/RhinoDock-v0.5.4.vsix
 
       - name: Publish VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RhinoDock-v0.4.1-${{ github.sha }}
-          path: artifacts/RhinoDock-v0.4.1.vsix
+          name: RhinoDock-v0.5.4-${{ github.sha }}
+          path: artifacts/RhinoDock-v0.5.4.vsix
           if-no-files-found: error

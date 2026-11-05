@@ -23,5 +23,19 @@
   <ItemGroup>
     <VSCTCompile Include="RhinoVSBridge.vsct" />
     <None Update="source.extension.vsixmanifest" />
+    <Content Include="Resources/RhinoDockIcon.png">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="$(IntermediateOutputPath)RhinoDockPythonProject.zip">
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <VSIXSubPath>ProjectTemplates/Python</VSIXSubPath>
+      <Visible>false</Visible>
+    </Content>
   </ItemGroup>
+  <Target Name="PackageRhinoDockPythonProject" BeforeTargets="AssignTargetPaths">
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/Templates/RhinoDockPython"
+                  DestinationFile="$(IntermediateOutputPath)RhinoDockPythonProject.zip"
+                  Overwrite="true" />
+  </Target>
 </Project>

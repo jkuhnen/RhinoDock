@@ -301,6 +301,12 @@ namespace RhinoVSBridge
                 "    with events_lock:\n" +
                 "        events_file.write(line + '\\n')\n" +
                 "        events_file.flush()\n" +
+                "# Mirror Python stdout to Rhino's command history as well as Visual Studio.\n" +
+                "try:\n" +
+                "    import Rhino\n" +
+                "    rhino_write = Rhino.RhinoApp.Write\n" +
+                "except (ImportError, AttributeError):\n" +
+                "    rhino_write = None\n" +
                 "class BridgeStream(io.TextIOBase):\n" +
                 "    def __init__(self, stream_name, capture):\n" +
                 "        self.stream_name, self.capture = stream_name, capture\n" +
@@ -313,6 +319,11 @@ namespace RhinoVSBridge
                 "        text = str(text)\n" +
                 "        self.capture.write(text)\n" +
                 "        emit(self.stream_name, text)\n" +
+                "        if self.stream_name == 'stdout' and rhino_write is not None:\n" +
+                "            try:\n" +
+                "                rhino_write(text)\n" +
+                "            except Exception:\n" +
+                "                pass  # Rhino command window must never break script execution.\n" +
                 "        return len(text)\n" +
                 "    def flush(self):\n" +
                 "        events_file.flush()\n" +

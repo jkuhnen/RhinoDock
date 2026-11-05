@@ -330,7 +330,8 @@ namespace RhinoVSBridge
 
                 Equal(2, update.Added);
                 Equal(1, update.Removed);
-                True(File.Exists(project + ".rhino-bridge.bak"), "The original project was not backed up.");
+                True(File.Exists(project + ".rhino-dock.bak"), "The original project was not backed up.");
+                Contains(".rhino-dock", IntelliSensePaths.CompatibilityDirectory);
                 var updated = File.ReadAllText(project);
                 Contains("C:\\Custom", updated);
                 Contains(newStub, updated);
@@ -363,6 +364,9 @@ namespace RhinoVSBridge
                 Contains("sys.settrace(cancellation_trace)", runner);
                 Contains("os.path.exists(cancel_path)", runner);
                 Contains("events_file.flush()", runner);
+                Contains("rhino_write = Rhino.RhinoApp.Write", runner);
+                Contains("self.stream_name == 'stdout'", runner);
+                Contains("rhino_write(text)", runner);
                 Contains("os.replace(temporary_startup, startup_path)", runner);
                 Contains("os.fsync(result_file.fileno())", runner);
                 Contains("os.replace(temporary_result, result_path)", runner);
