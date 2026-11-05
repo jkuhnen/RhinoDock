@@ -1,0 +1,81 @@
+name: Publish VSIX to Visual Studio Marketplace
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to validate without publishing
+        required: true
+        default: v0.5.5
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketplace-publishing
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name != 'release' || !github.event.release.prerelease
+    runs-on: windows-2025-vs2026
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download and verify release asset
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          $tag = $env:RELEASE_TAG
+          if ($tag -notmatch '^v([0-9]+\.[0-9]+\.[0-9]+)$') { throw "Invalid release tag: $tag" }
+          $version = $Matches[1]
+          $name = "RhinoDock-$tag.vsix"
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          gh release download $tag --repo $env:GITHUB_REPOSITORY --pattern $name --dir artifacts
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release download failed' }
+          $path = Join-Path $env:GITHUB_WORKSPACE "artifacts/$name"
+          if (-not (Test-Path $path)) { throw "Missing release asset: $name" }
+          Add-Type -AssemblyName System.IO.Compression
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($path)
+          try {
+            $entry = $zip.GetEntry('extension.vsixmanifest')
+            if (-not $entry) { throw 'Missing extension.vsixmanifest' }
+            $reader = [System.IO.StreamReader]::new($entry.Open())
+            try { [xml]$manifest = $reader.ReadToEnd() } finally { $reader.Dispose() }
+            $identity = $manifest.PackageManifest.Metadata.Identity
+            if ($identity.Version -ne $version) { throw 'Tag and VSIX version mismatch' }
+            if ($identity.Publisher -ne 'Johannes Kuhnen') { throw 'VSIX publisher mismatch' }
+            if ($identity.Id -ne 'RhinoVSBridge.08e0a5d2-a57b-48e5-8bf6-08f4efb3cf6b') { throw 'VSIX identity mismatch' }
+          } finally { $zip.Dispose() }
+          $config = Get-Content 'marketplace/publishManifest.json' -Raw | ConvertFrom-Json
+          if ($config.publisher -ne 'jkuhnen' -or $config.identity.internalName -ne 'RhinoDock') {
+            throw 'Marketplace identity mismatch'
+          }
+          "RHINO_DOCK_VSIX=$path" >> $env:GITHUB_ENV
+          Write-Host "Validated $name; SHA256 $((Get-FileHash $path -Algorithm SHA256).Hash)"
+
+      - name: Publish with Trusted Publishing (OIDC)
+        if: github.event_name == 'release'
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vsRoot = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
+          if (-not $vsRoot) { throw 'Visual Studio not installed on runner' }
+          $exe = Join-Path $vsRoot 'VSSDK/VisualStudioIntegration/Tools/Bin/VsixPublisher.exe'
+          if (-not (Test-Path $exe)) { throw "VsixPublisher.exe missing at $exe" }
+          & $exe publish -payload $env:RHINO_DOCK_VSIX -publishManifest "$env:GITHUB_WORKSPACE/marketplace/publishManifest.json" -oidc
+          if ($LASTEXITCODE -ne 0) { throw "Marketplace publication failed: $LASTEXITCODE" }
+
+      - name: Dry-run complete
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "Validation succeeded; Marketplace not modified."
