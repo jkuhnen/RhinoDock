@@ -108,7 +108,7 @@ namespace RhinoVSBridge
             };
         }
 
-        private static (string Path, bool Written) EnsureCompatibilityStubs(string projectFile)
+        internal static (string Path, bool Written) EnsureCompatibilityStubs(string projectFile)
         {
             var projectDirectory = Path.GetDirectoryName(Path.GetFullPath(projectFile))
                 ?? throw new InvalidDataException("Python project has no directory.");
