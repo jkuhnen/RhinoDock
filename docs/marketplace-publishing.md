@@ -14,11 +14,11 @@ Go to [Visual Studio Marketplace publisher management](https://marketplace.visua
 | Workflow | publish-marketplace.yml |
 | Environment | leave blank |
 
-The policy must match the GitHub workflow filename exactly. The job requests `id-token: write` and invokes `VsixPublisher.exe publish -oidc`. Do not create or store a Marketplace PAT.
+The policy must match the GitHub workflow filename exactly. The job requests `id-token: write`, exchanges the GitHub OIDC token through the Marketplace API (`POST /_apis/gallery/token?api-version=7.2-preview.1`), and uses the returned short-lived Marketplace credential with `VsixPublisher.exe publish`. No long-lived PAT is created or stored. This is a workaround for the `VsixPub0047` API-version error observed with Visual Studio 2026's built-in `VsixPublisher.exe -oidc`.
 
 ## Test without republishing
 
-After merging the workflow, open GitHub **Actions > Publish VSIX to Visual Studio Marketplace > Run workflow**, and use tag `v0.5.5`. The manual run downloads and validates the existing release VSIX, but **does not publish** to the Marketplace.
+After merging the workflow, open GitHub **Actions > Publish VSIX to Visual Studio Marketplace > Run workflow**. For validation only, use the release tag and leave **publish** unchecked (default); nothing is uploaded. To recover from a previously failed automatic release publication, choose the existing release tag, set **publish** to `true`, and run. This intentionally republishes the same version; only use it when the Marketplace still has the previous version.
 
 ## Publishing the next version
 
@@ -28,11 +28,11 @@ After merging the workflow, open GitHub **Actions > Publish VSIX to Visual Studi
 4. Create and publish a GitHub **stable** release tagged `vX.Y.Z`, targeting `main`, with the matching VSIX file attached.
 5. The publishing workflow validates tag, VSIX version, unchanged VSIX identity and publisher, then uploads to the Marketplace using OIDC.
 
-Do not manually republish an existing release solely to test OIDC; publishing with a matching version can overwrite the existing Marketplace package.
+Only enable manual **publish** when an existing release was not published to Marketplace due to a failed workflow; a matching version can overwrite an existing Marketplace package. Release events remain automatically published.
 
 ## References
 
 - [Microsoft: Trusted Publishing for Visual Studio Marketplace](https://developer.microsoft.com/blog/trusted-publishing-visual-studio-marketplace/)
 - [Microsoft: Publish a Visual Studio extension via command line](https://learn.microsoft.com/en-us/visualstudio/extensibility/walkthrough-publishing-a-visual-studio-extension-via-command-line)
 
-The first real OIDC token exchange is only verified when a **new version** is published. The workflow requires a Windows runner with a current `VsixPublisher.exe` supporting `-oidc`.
+The OIDC token exchange is verified by a real publication (either a new stable release or an explicitly opted-in retry). The workflow uses Microsoft's versioned Marketplace token endpoint, as implemented by [microsoft/vscode-vsce](https://github.com/microsoft/vscode-vsce/blob/main/src/oidc.ts), then passes the short-lived credential to the Windows VSIX publisher.
