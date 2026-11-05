@@ -10,7 +10,7 @@ Rhino Dock connects **full Microsoft Visual Studio 2026** to Rhino 8 for editing
 
 > **Rename notice:** Rhino Dock was formerly known as **Rhino VS Bridge**. Historical v0.4.0 installers retain their original name and UI labels.
 
-The latest published stable release is **[v0.5.4](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.5.4)**. **v0.5.5** is a publisher-metadata maintenance update being prepared for Visual Studio Marketplace. Breakpoint debugging and `debugpy` integration are not supported.
+The latest stable release is **[v0.5.5](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.5.5)**. Rhino Dock is also available in the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=jkuhnen.RhinoDock). Breakpoint debugging and `debugpy` integration are not supported.
 
 ## Background and motivation
 
@@ -37,7 +37,7 @@ Inspired by [Jingcheng Chen's RhinoPythonForVS](https://github.com/jingcheng-che
 
 ## Download
 
-Download `RhinoDock-v0.5.4.vsix` from the [latest stable GitHub Release](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.5.4). The archived [v0.4.0 release](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.4.0) remains available for reference.
+Download `RhinoDock-v0.5.5.vsix` from the [latest stable GitHub Release](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.5.5), or install it from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=jkuhnen.RhinoDock). The archived [v0.4.0 release](https://github.com/jkuhnen/RhinoDock/releases/tag/v0.4.0) remains available for reference.
 
 The VSIX is currently unsigned, so Visual Studio or Windows may warn about an unknown publisher. Download installers only from the official repository's Releases page.
 
@@ -46,7 +46,7 @@ The VSIX is currently unsigned, so Visual Studio or Windows may warn about an un
 No Visual Studio extension-development experience is required.
 
 1. Install **Visual Studio 2026** with the **Python development** workload, and install **Rhino 8**.
-2. Download `RhinoDock-v0.5.4.vsix`, close Visual Studio, run the VSIX installer, and restart Visual Studio.
+2. Install from the Visual Studio Marketplace, or download `RhinoDock-v0.5.5.vsix`, close Visual Studio, run the VSIX installer, and restart Visual Studio.
 3. Start Rhino, open Rhino's **ScriptEditor** once, then run `StartScriptServer` in Rhino's command line. Keep Rhino open.
 4. Create a **Rhino Dock Python Project** using **File > New > Project** or open an existing Python project in Visual Studio. Choose **Tools > Rhino: Configure Project IntelliSense**, then reload the project if Visual Studio asks.
 5. Open a `.py` file and press **Shift+F2** to run it in Rhino.
@@ -118,6 +118,7 @@ Check the Rhino Dock Output pane. The extension deliberately blocks overlapping 
 - [Python error navigation](docs/python-error-navigation-v04.md)
 - [Acknowledgements and project lineage](docs/acknowledgements.md)
 - [v0.4.0 release notes](docs/releases/v0.4.0.md)
+- [Marketplace publishing automation](docs/marketplace-publishing.md)
 
 ## Acknowledgements
 
