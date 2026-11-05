@@ -96,6 +96,15 @@ jobs:
             }
             $templateReader = [System.IO.StreamReader]::new($templateEntry.Open())
             try { [xml]$template = $templateReader.ReadToEnd() } finally { $templateReader.Dispose() }
+            # The wizard loads by strong name before the package itself is initialized.
+            # Register the VSIX directory as an assembly probing path via the pkgdef.
+            $pkgdefEntry = $zip.GetEntry("RhinoVSBridge.pkgdef")
+            if (-not $pkgdefEntry) { throw "Missing RhinoVSBridge.pkgdef" }
+            $pkgReader = [System.IO.StreamReader]::new($pkgdefEntry.Open())
+            try { $pkgdefText = $pkgReader.ReadToEnd() } finally { $pkgReader.Dispose() }
+            if ($pkgdefText -notmatch 'BindingPaths' -or $pkgdefText -notmatch 'PackageFolder') {
+              throw "Wizard assembly cannot be resolved without a registered VSIX binding path"
+            }
             # Read the real strong name from the compiled DLL, not a guessed token.
             $dllPath = "src/RhinoVSBridge/bin/Release/net48/RhinoVSBridge.dll"
             $assemblyIdentity = [System.Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $dllPath))
