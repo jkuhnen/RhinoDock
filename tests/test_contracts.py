@@ -104,12 +104,14 @@ class IntegrationContractTests(unittest.TestCase):
             ROOT / "src/RhinoVSBridge/source.extension.vsixmanifest").getroot()
         identity = next(node for node in manifest.iter()
                         if node.tag.endswith("Identity"))
-        self.assertEqual("0.5.4", identity.attrib["Version"])
+        self.assertEqual("0.5.5", identity.attrib["Version"])
+        self.assertEqual("Johannes Kuhnen", identity.attrib["Publisher"])
+        self.assertEqual("RhinoVSBridge.08e0a5d2-a57b-48e5-8bf6-08f4efb3cf6b", identity.attrib["Id"])
         display = next(node for node in manifest.iter()
                        if node.tag.endswith("DisplayName"))
         self.assertEqual("Rhino Dock", display.text)
         package = (ROOT / "src/RhinoVSBridge/BridgePackage.cs").read_text()
-        self.assertIn('"0.5.4"', package)
+        self.assertIn('"0.5.5"', package)
 
     def test_package_requests_the_compiled_command_table_resource(self):
         vsct = ROOT / "src/RhinoVSBridge/RhinoVSBridge.vsct"
