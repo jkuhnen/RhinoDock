@@ -29,7 +29,7 @@
       <Visible>false</Visible>
     </Content>
   </ItemGroup>
-  <Target Name="PackageRhinoDockPythonProject" BeforeTargets="GetVsixSourceItems;_GetVSIXSourceItems;Build">
+  <Target Name="PackageRhinoDockPythonProject" BeforeTargets="AssignTargetPaths">
     <MakeDir Directories="$(IntermediateOutputPath)" />
     <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/Templates/RhinoDockPython"
                   DestinationFile="$(IntermediateOutputPath)RhinoDockPythonProject.zip"
