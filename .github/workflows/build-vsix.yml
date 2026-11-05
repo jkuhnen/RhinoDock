@@ -101,14 +101,17 @@ jobs:
             # (avoid blurry icons and a solid white rectangle in dark mode).
             Add-Type -AssemblyName System.Drawing
             $imageStream = $zip.GetEntry("Resources/RhinoDockIcon.png").Open()
+            $imageBuffer = [System.IO.MemoryStream]::new()
             try {
-              $icon = [System.Drawing.Bitmap]::new($imageStream)
+              $imageStream.CopyTo($imageBuffer)
+              $imageBuffer.Position = 0
+              $icon = [System.Drawing.Bitmap]::new($imageBuffer)
               try {
                 if ($icon.Width -lt 256 -or $icon.Height -lt 256 -or $icon.GetPixel(0,0).A -ne 0) {
                   throw "Rhino Dock icon must be >=256px and transparent"
                 }
               } finally { $icon.Dispose() }
-            } finally { $imageStream.Dispose() }
+            } finally { $imageBuffer.Dispose(); $imageStream.Dispose() }
           } finally { $zip.Dispose() }
 
       - name: Run product C# tests
