@@ -150,7 +150,7 @@ namespace RhinoVSBridge
                 {
                     await LogAsync($"\r\n=== Running {file} ===\r\nTarget: {target}\r\n" +
                         (canCancel ? "Use Tools > Rhino: Cancel Running Script to request cooperative cancellation.\r\n" :
-                        "Legacy .py2 execution cannot be cancelled safely by the bridge.\r\n"));
+                        "Legacy .py2 execution cannot be cancelled safely by Rhino Dock.\r\n"));
                     var result = await _cli.RunScriptAsync(file, pipeId,
                         output => LogAsync(output.Text), execution.Cancellation.Token);
 
@@ -219,7 +219,7 @@ namespace RhinoVSBridge
             var execution = cancellation.Execution;
             if (cancellation.Status == CancellationRequestStatus.NoExecution)
             {
-                await LogAsync("No bridge execution is active for the selected Rhino instance; the slot is ready.\r\n");
+                await LogAsync("No Rhino Dock execution is active for the selected Rhino instance; the slot is ready.\r\n");
                 await JoinableTaskFactory.SwitchToMainThreadAsync();
                 MessageBox.Show("No Rhino script started by this extension is currently running.",
                     "Rhino Dock", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -238,7 +238,7 @@ namespace RhinoVSBridge
             {
                 await JoinableTaskFactory.SwitchToMainThreadAsync();
                 MessageBox.Show("The active .py2 script cannot be cancelled safely. " +
-                    "The bridge will not terminate rhinocode.exe because that does not prove execution stopped inside Rhino.",
+                    "Rhino Dock will not terminate rhinocode.exe because that does not prove execution stopped inside Rhino.",
                     "Rhino Dock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -427,8 +427,8 @@ namespace RhinoVSBridge
             }
             var confirmation = MessageBox.Show(
                 "Configure Rhino 8 CPython IntelliSense for:\r\n" + projectFile +
-                "\r\n\r\nA .rhino-bridge.bak backup will be made first. " +
-                "The command updates the discovered Rhino paths, removes obsolete paths managed by the bridge, and adds a project-local " +
+                "\r\n\r\nA .rhino-dock.bak backup (with a numbered suffix if one exists) will be made first. " +
+                "The command updates the discovered Rhino paths, removes obsolete paths managed by Rhino Dock, and adds a project-local " +
                 "scriptcontext typing shim. Close and reopen the solution afterward.",
                 "Rhino Dock", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
             if (confirmation != DialogResult.OK) return;
