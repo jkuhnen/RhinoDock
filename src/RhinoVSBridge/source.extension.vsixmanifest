@@ -3,8 +3,8 @@
   <Metadata>
     <Identity Id="RhinoVSBridge.08e0a5d2-a57b-48e5-8bf6-08f4efb3cf6b" Version="0.5.1" Language="en-US" Publisher="Rhino Dock Contributors" />
     <DisplayName>Rhino Dock</DisplayName>
-    <Icon>Resources/RhinoDockIcon.png</Icon>
     <Description xml:space="preserve">Run Rhino 8 Python scripts directly from Visual Studio 2022/2026, navigate Python errors, select a Rhino instance, and configure project IntelliSense search paths.</Description>
+    <Icon>Resources/RhinoDockIcon.png</Icon>
   </Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,)">
